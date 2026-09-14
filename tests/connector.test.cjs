@@ -32,6 +32,7 @@ test('metadata updates preserve handwritten text, frontmatter and previous revis
 test('renamed note resolves both sync and open; attachments resolve parent',async()=>{
  const f=fixture();await f.bridge.start();const old=path.join(dir,'library-ABCD1234.md'),renamed=path.join(dir,'이름 변경.md');f.files.set(renamed,f.files.get(old));f.files.delete(old);
  await f.bridge.openItem({parentID:1});assert.ok(!f.files.has(old));const url=new URL(f.launched[0]);assert.equal(url.searchParams.get('path'),path.join(dir,'이름 변경.md'));
+ assert.equal(url.searchParams.get('paneType'),'tab');
 });
 test('unmanaged files and damaged markers are never overwritten',async()=>{
  const f=fixture();const p=path.join(dir,'library-ABCD1234.md');f.files.set(p,'Existing personal note');await f.bridge.start();assert.equal(f.bridge.lastResult.errors.length,1);assert.equal(f.files.get(p),'Existing personal note');

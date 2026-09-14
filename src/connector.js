@@ -172,7 +172,7 @@ function createBridge(deps) {
       await io.makeDirectory(directory, {ignoreExisting: true, createAncestors: true});
       const result = await syncItem(item, await indexFiles());
       if (!result) throw new Error('Select a regular bibliographic item.');
-      const uri = 'obsidian://open?path=' + encodeURIComponent(result.file);
+      const uri = 'obsidian://open?path=' + encodeURIComponent(result.file) + '&paneType=tab';
       Z.launchURL(uri);
       return uri;
     });
@@ -192,7 +192,7 @@ function createBridge(deps) {
     menu('menu_ToolsPopup', 'zoc-configure', 'Zotero–Obsidian Connector: Configure…', () => configureWindow(window));
     menu('menu_ToolsPopup', 'zoc-dashboard', 'Open literature dashboard in Obsidian', async () => {
       await syncAll();
-      Z.launchURL('obsidian://open?path=' + encodeURIComponent(path.join(directory, 'dashboard.md')));
+      Z.launchURL('obsidian://open?path=' + encodeURIComponent(path.join(directory, 'dashboard.md')) + '&paneType=tab');
     });
     menu('zotero-itemmenu', 'zoc-obsidian-open', 'Open in Obsidian', async () => {
       const selected = window.ZoteroPane.getSelectedItems();

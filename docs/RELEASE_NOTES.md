@@ -1,4 +1,8 @@
-Initial public release.
+## v0.1.1
+
+Opening a paper note or literature dashboard from Zotero now requests a new Obsidian tab using the official `paneType=tab` URI parameter, preserving the current tab. Existing configuration and notes are retained.
+
+## Features
 
 - Automatic Markdown literature notes for Zotero personal and locally available group libraries.
 - A title-based literature dashboard and links between Zotero and Obsidian.

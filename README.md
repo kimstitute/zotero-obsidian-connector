@@ -35,6 +35,8 @@ Keep references in Zotero and your thinking in Obsidian. The connector creates o
 
 Open a note from Zotero, or follow its backlink to the original item. No API key, AI service, or Obsidian community plugin is required.
 
+Opening a paper or dashboard from Zotero uses a **new Obsidian tab**, keeping your current tab in place.
+
 <p align="center">
   <a href="#features">Features</a> &nbsp;·&nbsp;
   <a href="#quick-start">Installation</a> &nbsp;·&nbsp;
