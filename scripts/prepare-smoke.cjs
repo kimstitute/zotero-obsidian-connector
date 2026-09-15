@@ -1,0 +1,20 @@
+const fs=require('node:fs');
+const path=require('node:path');
+const root=path.resolve(__dirname,'..');
+const run=path.join(root,'work','smoke-'+Date.now());
+const profile=path.join(run,'profile'), data=path.join(run,'data'), vault=path.join(run,'vault');
+const addon=path.join(profile,'extensions','zotero-obsidian-connector@local');
+for(const folder of [addon,data,path.join(vault,'.obsidian')]) fs.mkdirSync(folder,{recursive:true});
+for(const name of ['manifest.json','bootstrap.js','connector.js','note-document.js','note-tabs.js']) fs.copyFileSync(path.join(root,'src',name),path.join(addon,name));
+fs.mkdirSync(path.join(addon,'icons'));
+for(const size of [48,96]) fs.copyFileSync(path.join(root,'assets',`icon-${size}.png`),path.join(addon,'icons',`icon-${size}.png`));
+const prefs={'extensions.zotero.dataDir':data,'extensions.zotero.useDataDir':true,'extensions.zotero.httpServer.enabled':false,
+ 'extensions.zotero.firstRun':false,'extensions.zotero.firstRun2':false,'extensions.autoDisableScopes':0,'extensions.enabledScopes':15,'browser.shell.checkDefaultBrowser':false};
+fs.writeFileSync(path.join(profile,'user.js'),Object.entries(prefs).map(([k,v])=>`user_pref(${JSON.stringify(k)}, ${JSON.stringify(v)});`).join('\n'));
+const result=path.join(run,'result.json');
+let smoke=fs.readFileSync(path.join(root,'tests','zotero-smoke.js'),'utf8');
+for(const [key,value] of Object.entries({__PROFILE__:profile,__VAULT__:vault,__RESULT__:result})) smoke=smoke.replaceAll(key,JSON.stringify(value));
+fs.writeFileSync(path.join(addon,'smoke.js'),smoke);
+fs.appendFileSync(path.join(addon,'bootstrap.js'),`\nvar originalStartup=startup; startup=async function(data){try{await originalStartup(data);Services.scriptloader.loadSubScript(data.rootURI+'smoke.js',this);}catch(error){await IOUtils.writeJSON(${JSON.stringify(result)},{ok:false,error:String(error),stack:error.stack});}};\n`);
+fs.writeFileSync(path.join(root,'work','smoke-current.json'),JSON.stringify({run,profile,result}));
+console.log(run);

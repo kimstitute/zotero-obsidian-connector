@@ -3,9 +3,11 @@ function createBridge(deps) {
   if (!deps) {
     const window = Zotero.getMainWindow();
     const timers = window.ChromeUtils.importESModule('resource://gre/modules/Timer.sys.mjs');
-    deps = {Z: Zotero, io: window.IOUtils, path: window.PathUtils, timers};
+    deps = {Z: Zotero, io: window.IOUtils, path: window.PathUtils, timers, createNoteTabs, mergeNote};
   }
   const {Z, io, path, timers} = deps;
+  const merge = deps.mergeNote || (typeof require !== 'undefined' ? require('./note-document.js').mergeNote : null);
+  const noteTabs = deps.createNoteTabs ? deps.createNoteTabs({Z, timers}) : null;
   let config = deps.config || null;
   let directory = null;
   const prefKey = 'extensions.zotero-obsidian-connector.config';
@@ -69,9 +71,9 @@ function createBridge(deps) {
       '- DOI: ' + inline(d.DOI), '- Tags: ' + (d.tags || []).map(t => inline(t.tag)).join(', '),
       '- [Open in Zotero](' + link(item) + ')', '', '## Abstract', '', clean(d.abstractNote), '', end].join('\n');
   }
-  async function indexFiles() {
+  async function indexFiles(folder = directory) {
     const index = new Map();
-    for (const file of await io.getChildren(directory)) {
+    for (const file of await io.getChildren(folder)) {
       if (!file.toLowerCase().endsWith('.md')) continue;
       const text = await io.readUTF8(file);
       const match = text.match(/<!-- zotero-bridge:((?:library|group-\d+)-[A-Z0-9]+):begin -->/);
@@ -177,6 +179,46 @@ function createBridge(deps) {
       return uri;
     });
   }
+  async function createNoteSession(item) {
+    if (item && item.parentID) item = await Z.Items.getAsync(item.parentID);
+    return enqueue(async () => {
+      if (!directory) throw new Error('Configure the connector from Zotero’s Tools menu first.');
+      await io.makeDirectory(directory, {ignoreExisting: true, createAncestors: true});
+      const result = await syncItem(item, await indexFiles());
+      if (!result) throw new Error('Select a regular bibliographic item.');
+      const id = identity(item), folder = directory;
+      let file = result.file;
+      const locate = async () => {
+        // Resolve by identity again if Obsidian renamed the file. Never recreate a missing note here.
+        const found = (await indexFiles(folder)).get(id);
+        if (!found) throw new Error('The note was moved or deleted. Your draft is retained; restore the file inside its original notes folder.');
+        file = found;
+        return {file, text: await io.readUTF8(file)};
+      };
+      return {
+        key: folder + '/' + id, identity: id, title: item.toJSON().title || item.key,
+        read: () => enqueue(locate),
+        save: (base, edited) => enqueue(async () => {
+          const current = await locate();
+          const text = merge(base, edited, current.text, id);
+          if (text !== current.text) {
+            if (await io.readUTF8(file) !== current.text) throw new Error('The note changed while saving. Your draft is retained; try again.');
+            await io.writeUTF8(file, text, {tmpPath: file + '.bridge-tmp', backupFile: file + '.bridge-bak'});
+          }
+          return {file, text};
+        }),
+        openExternal: () => enqueue(async () => {
+          const current = await locate();
+          Z.launchURL('obsidian://open?path=' + encodeURIComponent(current.file) + '&paneType=tab');
+        })
+      };
+    });
+  }
+  async function openItemInTab(item, window = Z.getMainWindow()) {
+    if (!noteTabs) throw new Error('The Zotero note editor is unavailable. Reinstall the connector.');
+    const session = await createNoteSession(item);
+    if (session && !stopped) return noteTabs.open(window, session);
+  }
   function report(window, error) { Z.logError(error); window.alert('Obsidian Bridge: ' + error); }
   function addWindow(window) {
     if (windows.has(window)) return;
@@ -199,6 +241,11 @@ function createBridge(deps) {
       if (selected.length !== 1) throw new Error('Select exactly one paper.');
       await openItem(selected[0]);
     });
+    menu('zotero-itemmenu', 'zoc-note-tab', 'Open Obsidian note in Zotero tab', async () => {
+      const selected = window.ZoteroPane.getSelectedItems();
+      if (selected.length !== 1) throw new Error('Select exactly one paper.');
+      await openItemInTab(selected[0], window);
+    });
     menu('menu_ToolsPopup', 'zoc-obsidian-sync', 'Sync literature notes to Obsidian', async () => {
       const r = await syncAll();
       if (r) window.alert('Obsidian: created ' + r.created + ', updated ' + r.updated + ', unchanged ' + r.unchanged + ', errors ' + r.errors.length);
@@ -206,6 +253,7 @@ function createBridge(deps) {
     windows.set(window, nodes);
   }
   function removeWindow(window) {
+    noteTabs?.removeWindow(window);
     for (const node of windows.get(window) || []) node.remove();
     windows.delete(window);
   }
@@ -223,6 +271,7 @@ function createBridge(deps) {
       catch (e) { config = null; directory = null; Z.logError(e); }
     }
     for (const window of Z.getMainWindows()) addWindow(window);
+    Z.Reader?.registerEventListener('createViewContextMenu', readerMenu, 'zotero-obsidian-connector@local');
     observer = Z.Notifier.registerObserver({notify(event) {
       if (['add', 'modify', 'refresh', 'trash', 'delete'].includes(event)) schedule();
     }}, ['item'], 'zoc-obsidian-bridge');
@@ -232,9 +281,13 @@ function createBridge(deps) {
     stopped = true;
     if (observer !== undefined) Z.Notifier.unregisterObserver(observer);
     if (timer) timers.clearTimeout(timer);
+    Z.Reader?.unregisterEventListener('createViewContextMenu', readerMenu);
+    noteTabs?.stop();
     for (const window of Array.from(windows.keys())) removeWindow(window);
     await chain;
   }
-  return {start, stop, syncAll, configure, openItem, addWindow, removeWindow, render, identity, get configured() { return !!directory; }, get lastResult() { return lastResult; }};
+  const readerMenu = ({reader, append}) => append({label: 'Open Obsidian note in Zotero tab',
+    onCommand: () => Z.Items.getAsync(reader.itemID).then(item => openItemInTab(item)).catch(e => report(Z.getMainWindow(), e))});
+  return {start, stop, syncAll, configure, openItem, openItemInTab, createNoteSession, addWindow, removeWindow, render, identity, get configured() { return !!directory; }, get lastResult() { return lastResult; }};
 }
 if (typeof module !== 'undefined') module.exports = {createBridge};

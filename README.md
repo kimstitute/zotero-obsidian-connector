@@ -37,6 +37,8 @@ Open a note from Zotero, or follow its backlink to the original item. No API key
 
 Opening a paper or dashboard from Zotero uses a **new Obsidian tab**, keeping your current tab in place.
 
+You can also **read and edit a paper's Markdown note in a Zotero tab**. Both apps use the same file in your configured vault.
+
 <p align="center">
   <a href="#features">Features</a> &nbsp;·&nbsp;
   <a href="#quick-start">Installation</a> &nbsp;·&nbsp;
@@ -52,6 +54,7 @@ Opening a paper or dashboard from Zotero uses a **new Obsidian tab**, keeping yo
 | **📄 Literature notes** | One Markdown file per bibliographic item in personal and locally available group libraries. |
 | **🗂️ Title dashboard** | A `dashboard.md` with paper titles, first authors, and newest-year-first grouping. |
 | **🔗 App-to-app navigation** | **Open in Obsidian** from Zotero; **Open in Zotero** from each note. |
+| **📝 Notes inside Zotero** | A Markdown editor and basic preview, with draft recovery and external-change detection. |
 | **🔄 Automatic updates** | Synchronization on startup and after Zotero item changes. |
 | **✍️ Your notes stay yours** | Handwritten content outside the generated block is preserved. |
 | **🏷️ Rename support** | Rename files inside the configured notes folder; the next sync updates dashboard links. |
@@ -104,6 +107,7 @@ Your vault/
 | :--- | :--- |
 | **Browse my papers** | Open `dashboard.md` and choose a title. |
 | **Open a paper's note** | Right-click one Zotero paper → **Open in Obsidian**. |
+| **Edit inside Zotero** | Right-click a paper → **Open Obsidian note in Zotero tab**. Also available in the PDF reader. |
 | **Return to Zotero** | Click **Open in Zotero** in the Markdown note. |
 | **Refresh everything** | Zotero **Tools → Sync literature notes to Obsidian**. |
 | **Change the destination** | Run **Tools → Zotero–Obsidian Connector: Configure…** again. |
@@ -115,6 +119,18 @@ Keep Zotero running for automatic updates. In Obsidian editing mode, use **Ctrl+
 Each note includes a title, authors, date, publication, DOI, tags, abstract, and Zotero backlink. Write your own thoughts under **My notes** and connect ideas under **Related notes**.
 
 The connector updates only the section enclosed by `<!-- zotero-bridge:…:begin -->` and `<!-- zotero-bridge:…:end -->`. Keep these comments intact and write outside them.
+
+### Read and edit inside Zotero (v0.2.0)
+
+Choose **Open Obsidian note in Zotero tab** from a paper or its PDF reader. The connector uses the existing identity mapping, including notes renamed inside the configured folder. If the note does not exist, normal synchronization creates it first. Reopening a paper selects its existing tab.
+
+- Edit **내 노트 · Markdown** on the left; the right pane previews the whole note. Bibliographic metadata remains managed by Zotero. Expand **문서 앞부분 · 속성 편집** to edit frontmatter or text before the generated block.
+- **저장** or **Ctrl+S / ⌘S** saves to the same `.md` file Obsidian uses. **Obsidian에서 열기** opens the last saved file in the app. **읽기 / 편집** toggles the editor pane.
+- External changes are checked every two seconds. Clean tabs reload them. Metadata changes can merge with your draft; overlapping personal edits show the current file for comparison and block saving.
+- On a conflict, copy the parts of your draft you need, then use **현재 파일 불러오기** and reconcile your edits. Reloading a dirty tab asks before discarding its draft. There is no force-overwrite button.
+- Unsaved drafts are stored in local Zotero preferences and restored when that paper is reopened after closing the tab or restarting/disabling the connector. Tabs themselves are not restored automatically. Drafts contain note text, are not synchronized across devices, and stay associated with the original notes folder until saved or explicitly discarded.
+
+This is a basic Markdown editor, not the embedded Obsidian application. The preview supports headings, bullets, bold text, code, and HTTP/Zotero links. Wikilink navigation, math, tables, embedded media, and Obsidian plugins require Obsidian. Raw HTML is displayed as text; previews do not load remote images or execute note code. Saves retain the previous revision as `.bridge-bak`; keep normal vault backups because cross-application writes cannot be fully locked.
 
 ## Questions
 

@@ -27,6 +27,8 @@ def build(repository=None):
         'manifest.json': (json.dumps(manifest, ensure_ascii=False, indent=2) + '\n').encode(),
         'bootstrap.js': (ROOT / 'src/bootstrap.js').read_bytes(),
         'connector.js': (ROOT / 'src/connector.js').read_bytes(),
+        'note-document.js': (ROOT / 'src/note-document.js').read_bytes(),
+        'note-tabs.js': (ROOT / 'src/note-tabs.js').read_bytes(),
         'LICENSE': (ROOT / 'LICENSE').read_bytes(),
         'icons/icon-48.png': (ROOT / 'assets/icon-48.png').read_bytes(),
         'icons/icon-96.png': (ROOT / 'assets/icon-96.png').read_bytes(),

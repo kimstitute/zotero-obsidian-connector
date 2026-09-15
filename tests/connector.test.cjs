@@ -17,7 +17,7 @@ function fixture(options = {}) {
     readUTF8:async p=>{if(!files.has(p))throw Error('missing');return files.get(p);},
     writeUTF8:async(p,s,o={})=>{if(o.mode==='create'&&files.has(p))throw Error('exists');if(o.backupFile)files.set(o.backupFile,files.get(p));files.set(p,s);}};
   const timers={setTimeout:f=>(pending=f,1),clearTimeout:()=>{pending=null;}};
-  return {bridge:createBridge({Z,io,path:{join:path.join,filename:path.basename,isAbsolute:path.isAbsolute,normalize:path.normalize},timers,config:options.unconfigured ? null : {vaultPath: "C:/TestVault",noteFolder: "Papers"}}),items,files,launched,errors,make,notify:(...a)=>notify(...a),flush:async()=>{const f=pending;pending=null;if(f)f();await Promise.resolve();}};
+  return {bridge:createBridge({Z,io,path:{join:path.join,filename:path.basename,isAbsolute:path.isAbsolute,normalize:path.normalize},timers,config:options.unconfigured ? null : {vaultPath: "C:/TestVault",noteFolder: "Papers"}}),items,files,launched,errors,make,io,Z,prefs,notify:(...a)=>notify(...a),flush:async()=>{const f=pending;pending=null;if(f)f();await Promise.resolve();}};
 }
 const dir='C:\\TestVault\\Papers';
 test('full library coverage, group keys separated, excluded feeds and repeat idempotence',async()=>{
@@ -73,4 +73,46 @@ test('configuration rejects traversal, absolute notes folders and non-vault dest
 test('saved local settings are loaded without hardcoded defaults',async()=>{
  const f=fixture({unconfigured:true,saved:{vaultPath:'C:/TestVault',noteFolder:'SavedNotes'}});await f.bridge.start();
  assert.equal(f.bridge.configured,true);assert.ok(f.files.has(path.join('C:/TestVault','SavedNotes','dashboard.md')));
+});
+
+test('internal note sessions edit the same file, preserve new metadata and create a backup', async () => {
+ const f=fixture(); await f.bridge.start(); const session=await f.bridge.createNoteSession({parentID:1});
+ const base=await session.read(); f.items[0].data.title='New metadata'; await f.bridge.syncAll();
+ const latest=f.files.get(base.file);
+ const saved=await session.save(base.text,base.text+'\n내 생각 **보존**\n');
+ assert.equal(saved.file,base.file); assert.match(saved.text,/# New metadata/); assert.ok(saved.text.endsWith('내 생각 **보존**\n'));
+ assert.equal(f.files.get(base.file+'.bridge-bak'),latest); assert.equal(f.launched.length,0);
+});
+
+test('internal saving rejects simultaneous personal edits and preserves both disk and input', async () => {
+ const f=fixture(); await f.bridge.start(); const session=await f.bridge.createNoteSession(f.items[0]); const base=await session.read();
+ const draft=base.text+'Zotero draft'; const disk=base.text+'Obsidian draft'; f.files.set(base.file,disk);
+ await assert.rejects(session.save(base.text,draft),{code:'NOTE_CONFLICT'});
+ assert.equal(f.files.get(base.file),disk); assert.ok(draft.endsWith('Zotero draft'));
+ const saved=await session.save(disk,disk+'\nReconciled'); assert.ok(saved.text.endsWith('Reconciled'));
+});
+
+test('sessions follow renamed files, remain in their original vault and do not recreate missing files', async () => {
+ const f=fixture(); await f.bridge.start(); const session=await f.bridge.createNoteSession(f.items[0]); const base=await session.read();
+ const renamed=path.join(dir,'이름 (변경).md'); f.files.set(renamed,base.text); f.files.delete(base.file);
+ await f.bridge.configure({vaultPath:'C:/TestVault',noteFolder:'NewFolder'});
+ const saved=await session.save(base.text,base.text+'Original folder'); assert.equal(saved.file,renamed);
+ assert.ok(!f.files.has(base.file)); await session.openExternal(); assert.equal(new URL(f.launched[0]).searchParams.get('path'),renamed);
+ f.files.delete(renamed); await assert.rejects(session.save(saved.text,saved.text+'More'),/moved or deleted/);
+ assert.ok(!f.files.has(renamed));
+});
+
+test('external change during the final save check is detected without overwriting', async () => {
+ const f=fixture(); await f.bridge.start(); const session=await f.bridge.createNoteSession(f.items[0]); const base=await session.read();
+ const read=f.io.readUTF8; let count=0;
+ f.io.readUTF8=async file=>{if(file===base.file && ++count===3) f.files.set(file,base.text+'External race'); return read(file);};
+ await assert.rejects(session.save(base.text,base.text+'Our edit'),/changed while saving/);
+ assert.ok(f.files.get(base.file).endsWith('External race'));
+});
+
+test('session writes stop after disable and malformed identities cannot be saved', async () => {
+ const f=fixture(); await f.bridge.start(); const session=await f.bridge.createNoteSession(f.items[0]); const base=await session.read();
+ await assert.rejects(session.save(base.text,'Missing markers'),/markers/);
+ await assert.rejects(session.save(base.text,base.text.replace('## Abstract','## Overridden')),/managed by Zotero/);
+ await f.bridge.stop(); assert.equal(await session.save(base.text,base.text+'Late'),null); assert.equal(f.files.get(base.file),base.text);
 });
