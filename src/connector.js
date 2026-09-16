@@ -1,4 +1,4 @@
-/* Local-only bridge. No library writes, network calls or note deletions. */
+/* Writes only generated vault files. Zotero remains read-only; translation is opt-in. */
 function createBridge(deps) {
   if (!deps) {
     const window = Zotero.getMainWindow();
@@ -9,8 +9,36 @@ function createBridge(deps) {
   const merge = deps.mergeNote || (typeof require !== 'undefined' ? require('./note-document.js').mergeNote : null);
   const noteTabs = deps.createNoteTabs ? deps.createNoteTabs({Z, timers}) : null;
   let config = deps.config || null;
+  let translationApiKey = deps.translationApiKey || '';
+  let translationCache = {};
   let directory = null;
   const prefKey = 'extensions.zotero-obsidian-connector.config';
+  const secretPrefKey = 'extensions.zotero-obsidian-connector.translationApiKey';
+  const translationPromptVersion = 1;
+  const translationSystemPrompt = [
+    'Translate the academic abstract into natural Korean.',
+    'Keep technical terms, method names, model names, dataset names, acronyms, equations, code identifiers, product names, organization names, and other proper nouns in English.',
+    'Do not summarize, explain, add, or omit information.',
+    'Return only the translated abstract without a heading, quotation marks, or commentary.'
+  ].join(' ');
+  function translationDefaults(value = {}) {
+    return {
+      enabled: value.translateAbstracts === true,
+      endpoint: value.translationEndpoint || 'http://127.0.0.1:11434/v1/chat/completions',
+      model: value.translationModel || 'qwen2.5:7b'
+    };
+  }
+  function validateTranslationURL(value) {
+    let parsed;
+    try { parsed = new URL(value); }
+    catch (_) { throw new Error('Enter a valid translation API URL.'); }
+    const local = ['localhost', '127.0.0.1', '[::1]'].includes(parsed.hostname);
+    if (parsed.protocol !== 'https:' && !(parsed.protocol === 'http:' && local)) {
+      throw new Error('Translation API URLs must use HTTPS, except for localhost.');
+    }
+    if (parsed.username || parsed.password) throw new Error('Do not put API credentials in the translation URL.');
+    return parsed.toString();
+  }
   async function validateConfig(value) {
     if (!value || typeof value.vaultPath !== 'string' || !path.isAbsolute(value.vaultPath)) {
       throw new Error('Choose an absolute path to an existing Obsidian vault.');
@@ -23,14 +51,31 @@ function createBridge(deps) {
     if (!segments.length || segments.some(s => !s || s === '.' || s === '..' || /[<>:"|?*\x00-\x1f]/.test(s) || /[. ]$/.test(s) || /^\./.test(s) || /^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\.|$)/i.test(s))) {
       throw new Error('Use a relative notes folder such as Papers or Research/Papers; hidden folders and parent paths are not allowed.');
     }
-    return {config: {vaultPath, noteFolder: segments.join('/')}, directory: path.join(vaultPath, ...segments)};
+    const translation = translationDefaults(value);
+    if (translation.enabled) {
+      translation.endpoint = validateTranslationURL(String(translation.endpoint || '').trim());
+      translation.model = String(translation.model || '').trim();
+      if (!translation.model || translation.model.length > 200) throw new Error('Enter a translation model name.');
+    }
+    return {config: {
+      vaultPath,
+      noteFolder: segments.join('/'),
+      translateAbstracts: translation.enabled,
+      translationEndpoint: translation.endpoint,
+      translationModel: translation.model
+    }, directory: path.join(vaultPath, ...segments)};
   }
   async function configure(value) {
     const validated = await validateConfig(value);
     await enqueue(async () => {
       Z.Prefs.set(prefKey, JSON.stringify(validated.config), true);
+      if (Object.prototype.hasOwnProperty.call(value, 'translationApiKey')) {
+        translationApiKey = String(value.translationApiKey || '').trim();
+        Z.Prefs.set(secretPrefKey, translationApiKey, true);
+      }
       config = validated.config;
       directory = validated.directory;
+      translationCache = {};
     });
     return syncAll();
   }
@@ -39,7 +84,23 @@ function createBridge(deps) {
     if (vaultPath === null) return;
     const noteFolder = window.prompt('Notes folder inside the vault:', config?.noteFolder || 'Papers');
     if (noteFolder === null) return;
-    await configure({vaultPath: vaultPath.trim(), noteFolder: noteFolder.trim()});
+    const enabled = window.confirm('Translate Zotero abstracts into Korean when creating Obsidian notes?\n\nTechnical terms, model and dataset names, acronyms, and proper nouns will stay in English.');
+    let translationEndpoint, translationModel, key;
+    if (enabled) {
+      const defaults = translationDefaults(config || {});
+      translationEndpoint = window.prompt('OpenAI-compatible chat completions URL:', defaults.endpoint);
+      if (translationEndpoint === null) return;
+      translationModel = window.prompt('Translation model:', defaults.model);
+      if (translationModel === null) return;
+      key = window.prompt('Optional Bearer API key. Leave blank for local Ollama. It is stored only in local Zotero preferences:', '');
+      if (key === null) return;
+    }
+    await configure({
+      vaultPath: vaultPath.trim(), noteFolder: noteFolder.trim(),
+      translateAbstracts: enabled,
+      translationEndpoint, translationModel,
+      ...(enabled ? {translationApiKey: key} : {})
+    });
     window.alert('Connector configured. Open your notes folder/dashboard.md in Obsidian.');
   }
   const windows = new Map();
@@ -61,15 +122,105 @@ function createBridge(deps) {
     return String(value || '').replace(/<!--/g, '&lt;!--').replace(/-->/g, '--&gt;');
   }
   function inline(value) { return clean(value).replace(/[\r\n]+/g, ' ').replace(/([\\`*_[\]<>])/g, '\\$1'); }
-  function render(item) {
+  function fingerprint(value) {
+    let hash = 2166136261;
+    for (const char of String(value || '')) {
+      hash ^= char.codePointAt(0);
+      hash = Math.imul(hash, 16777619);
+    }
+    return String(value || '').length + '-' + (hash >>> 0).toString(16);
+  }
+  function translationCachePath() { return path.join(directory, '.zotero-bridge-translations.json'); }
+  async function loadTranslationCache() {
+    translationCache = {};
+    if (!directory || !await io.exists(translationCachePath())) return;
+    try {
+      const saved = JSON.parse(await io.readUTF8(translationCachePath()));
+      if (saved && saved.version === 1 && saved.items && typeof saved.items === 'object') translationCache = saved.items;
+    } catch (e) { Z.logError(e); }
+  }
+  async function saveTranslationCache() {
+    if (!directory || !translationDefaults(config || {}).enabled) return;
+    const file = translationCachePath(), body = JSON.stringify({version: 1, items: translationCache}, null, 2) + '\n';
+    const exists = await io.exists(file);
+    await io.writeUTF8(file, body, exists ? {tmpPath: file + '.tmp'} : {mode: 'create'});
+  }
+  function parseTranslationResponse(response) {
+    let body = response?.response ?? response?.responseText ?? response;
+    if (typeof body === 'string') body = JSON.parse(body);
+    let content = body?.choices?.[0]?.message?.content;
+    if (Array.isArray(content)) content = content.map(part => part?.text || '').join('');
+    if (typeof content !== 'string' || !content.trim()) throw new Error('Translation API returned no text.');
+    return content.trim();
+  }
+  async function requestTranslation(abstract) {
+    const translation = translationDefaults(config || {});
+    if (deps.translate) return String(await deps.translate({
+      abstract, endpoint: translation.endpoint, model: translation.model,
+      apiKey: translationApiKey, systemPrompt: translationSystemPrompt
+    })).trim();
+    if (!Z.HTTP?.request) throw new Error('Zotero HTTP API is unavailable.');
+    const headers = {'Content-Type': 'application/json'};
+    if (translationApiKey) headers.Authorization = 'Bearer ' + translationApiKey;
+    const response = await Z.HTTP.request('POST', translation.endpoint, {
+      headers,
+      body: JSON.stringify({
+        model: translation.model,
+        temperature: 0,
+        messages: [
+          {role: 'system', content: translationSystemPrompt},
+          {role: 'user', content: abstract}
+        ]
+      }),
+      responseType: 'json',
+      timeout: 120000
+    });
+    return parseTranslationResponse(response);
+  }
+  async function translatedAbstract(item) {
+    const source = String(item.toJSON().abstractNote || '').trim();
+    const translation = translationDefaults(config || {});
+    if (!translation.enabled || !source) return {text: source, translated: false};
+    const id = identity(item), sourceHash = fingerprint(source);
+    const cached = translationCache[id];
+    if (cached && cached.sourceHash === sourceHash && cached.endpoint === translation.endpoint &&
+        cached.model === translation.model && cached.promptVersion === translationPromptVersion && cached.translation) {
+      return {text: cached.translation, translated: true, cached: true};
+    }
+    try {
+      const translated = await requestTranslation(source);
+      if (!translated) throw new Error('Translation API returned an empty translation.');
+      translationCache[id] = {sourceHash, endpoint: translation.endpoint, model: translation.model,
+        promptVersion: translationPromptVersion, translation: translated};
+      return {text: translated, translated: true, cached: false};
+    } catch (error) {
+      Z.logError(error);
+      return {text: source, translated: false, error: String(error)};
+    }
+  }
+  async function translateItems(items, concurrency = 3) {
+    const results = new Map();
+    let cursor = 0;
+    async function worker() {
+      while (cursor < items.length) {
+        const item = items[cursor++];
+        results.set(identity(item), await translatedAbstract(item));
+      }
+    }
+    await Promise.all(Array.from({length: Math.min(concurrency, items.length)}, () => worker()));
+    return results;
+  }
+  function render(item, abstract = null) {
     const id = identity(item), [begin, end] = markers(id);
     const d = item.toJSON();
     const authors = (d.creators || []).map(c => c.name || [c.firstName, c.lastName].filter(Boolean).join(' '));
+    const abstractText = abstract?.text ?? String(d.abstractNote || '');
+    const abstractHeading = abstract?.translated ? '## Abstract (한국어)' : '## Abstract';
     return [begin, '# ' + inline(d.title || item.key), '',
       '- Authors: ' + authors.map(inline).join('; '), '- Date: ' + inline(d.date),
       '- Publication: ' + inline(d.publicationTitle || d.proceedingsTitle || d.publisher),
       '- DOI: ' + inline(d.DOI), '- Tags: ' + (d.tags || []).map(t => inline(t.tag)).join(', '),
-      '- [Open in Zotero](' + link(item) + ')', '', '## Abstract', '', clean(d.abstractNote), '', end].join('\n');
+      '- [Open in Zotero](' + link(item) + ')', '', abstractHeading, '', clean(abstractText), '', end].join('\n');
   }
   async function indexFiles(folder = directory) {
     const index = new Map();
@@ -83,12 +234,12 @@ function createBridge(deps) {
     }
     return index;
   }
-  async function syncItem(item, index) {
+  async function syncItem(item, index, abstract = null) {
     if (!item || item.deleted || !item.isRegularItem() || !identity(item)) return null;
     const id = identity(item), file = index.get(id) || path.join(directory, id + '.md');
-    const result = await writeManaged(file, id, render(item), '\n\n## My notes\n\n\n## Related notes\n\n');
+    const result = await writeManaged(file, id, render(item, abstract), '\n\n## My notes\n\n\n## Related notes\n\n');
     index.set(id, file);
-    return result;
+    return {...result, translationError: abstract?.error || null};
   }
   async function writeManaged(file, id, block, tail = '\n') {
     const exists = await io.exists(file);
@@ -147,18 +298,28 @@ function createBridge(deps) {
     return enqueue(async () => {
       if (!directory) throw new Error('Configure the connector from Zotero’s Tools menu first.');
       await io.makeDirectory(directory, {ignoreExisting: true, createAncestors: true});
+      await loadTranslationCache();
       const index = await indexFiles();
-      const result = {created: 0, updated: 0, unchanged: 0, errors: [], completedAt: null};
+      const result = {created: 0, updated: 0, unchanged: 0, errors: [], translationErrors: [], completedAt: null};
       const entries = [];
+      const items = [];
       for (const lib of libraries()) {
         if (lib.waitForDataLoad) await lib.waitForDataLoad('item');
-        const items = await Z.Items.getAll(lib.libraryID, true, false);
-        for (const item of items) {
-          if (stopped) return result;
-          try { const r = await syncItem(item, index); if (r) { result[r.status]++; entries.push({item, file: r.file}); } }
-          catch (e) { result.errors.push({key: item.key, message: String(e)}); Z.logError(e); }
+        const libraryItems = await Z.Items.getAll(lib.libraryID, true, false);
+        for (const item of libraryItems) {
+          if (item && !item.deleted && item.isRegularItem() && identity(item)) items.push(item);
         }
       }
+      const translations = await translateItems(items);
+      for (const item of items) {
+          if (stopped) return result;
+          try { const r = await syncItem(item, index, translations.get(identity(item))); if (r) {
+            result[r.status]++; entries.push({item, file: r.file});
+            if (r.translationError) result.translationErrors.push({key: item.key, message: r.translationError});
+          } }
+          catch (e) { result.errors.push({key: item.key, message: String(e)}); Z.logError(e); }
+      }
+      await saveTranslationCache();
       try { result.dashboard = await syncDashboard(entries, result.errors.length); }
       catch (e) { result.errors.push({key: 'dashboard', message: String(e)}); Z.logError(e); }
       result.completedAt = new Date().toISOString();
@@ -172,7 +333,10 @@ function createBridge(deps) {
     return enqueue(async () => {
       if (!directory) throw new Error('Configure the connector from Zotero’s Tools menu first.');
       await io.makeDirectory(directory, {ignoreExisting: true, createAncestors: true});
-      const result = await syncItem(item, await indexFiles());
+      await loadTranslationCache();
+      const abstract = await translatedAbstract(item);
+      const result = await syncItem(item, await indexFiles(), abstract);
+      await saveTranslationCache();
       if (!result) throw new Error('Select a regular bibliographic item.');
       const uri = 'obsidian://open?path=' + encodeURIComponent(result.file) + '&paneType=tab';
       Z.launchURL(uri);
@@ -184,7 +348,10 @@ function createBridge(deps) {
     return enqueue(async () => {
       if (!directory) throw new Error('Configure the connector from Zotero’s Tools menu first.');
       await io.makeDirectory(directory, {ignoreExisting: true, createAncestors: true});
-      const result = await syncItem(item, await indexFiles());
+      await loadTranslationCache();
+      const abstract = await translatedAbstract(item);
+      const result = await syncItem(item, await indexFiles(), abstract);
+      await saveTranslationCache();
       if (!result) throw new Error('Select a regular bibliographic item.');
       const id = identity(item), folder = directory;
       let file = result.file;
@@ -248,7 +415,7 @@ function createBridge(deps) {
     });
     menu('menu_ToolsPopup', 'zoc-obsidian-sync', 'Sync literature notes to Obsidian', async () => {
       const r = await syncAll();
-      if (r) window.alert('Obsidian: created ' + r.created + ', updated ' + r.updated + ', unchanged ' + r.unchanged + ', errors ' + r.errors.length);
+      if (r) window.alert('Obsidian: created ' + r.created + ', updated ' + r.updated + ', unchanged ' + r.unchanged + ', errors ' + r.errors.length + ', translation fallbacks ' + r.translationErrors.length);
     });
     windows.set(window, nodes);
   }
@@ -266,6 +433,8 @@ function createBridge(deps) {
       try { const saved = Z.Prefs.get(prefKey, true); if (saved) config = JSON.parse(saved); }
       catch (e) { Z.logError(e); }
     }
+    try { translationApiKey = deps.translationApiKey || Z.Prefs.get(secretPrefKey, true) || ''; }
+    catch (e) { Z.logError(e); }
     if (config) {
       try { const valid = await validateConfig(config); config = valid.config; directory = valid.directory; }
       catch (e) { config = null; directory = null; Z.logError(e); }

@@ -33,7 +33,7 @@ Keep references in Zotero and your thinking in Obsidian. The connector creates o
 
 **Zotero library → Markdown notes → Title dashboard**
 
-Open a note from Zotero, or follow its backlink to the original item. No API key, AI service, or Obsidian community plugin is required.
+Open a note from Zotero, or follow its backlink to the original item. The core connector needs no API key, AI service, or Obsidian community plugin. Korean abstract translation is optional and uses an OpenAI-compatible endpoint that you choose.
 
 Opening a paper or dashboard from Zotero uses a **new Obsidian tab**, keeping your current tab in place.
 
@@ -56,6 +56,7 @@ You can also **read and edit a paper's Markdown note in a Zotero tab**. Both app
 | **🔗 App-to-app navigation** | **Open in Obsidian** from Zotero; **Open in Zotero** from each note. |
 | **📝 Notes inside Zotero** | A Markdown editor and basic preview, with draft recovery and external-change detection. |
 | **🔄 Automatic updates** | Synchronization on startup and after Zotero item changes. |
+| **🌐 Korean abstracts** | Optionally translate abstracts while keeping technical terms, model and dataset names, acronyms, and proper nouns in English. |
 | **✍️ Your notes stay yours** | Handwritten content outside the generated block is preserved. |
 | **🏷️ Rename support** | Rename files inside the configured notes folder; the next sync updates dashboard links. |
 
@@ -131,6 +132,27 @@ Choose **Open Obsidian note in Zotero tab** from a paper or its PDF reader. The 
 - Unsaved drafts are stored in local Zotero preferences and restored when that paper is reopened after closing the tab or restarting/disabling the connector. Tabs themselves are not restored automatically. Drafts contain note text, are not synchronized across devices, and stay associated with the original notes folder until saved or explicitly discarded.
 
 This is a basic Markdown editor, not the embedded Obsidian application. The preview supports headings, bullets, bold text, code, and HTTP/Zotero links. Wikilink navigation, math, tables, embedded media, and Obsidian plugins require Obsidian. Raw HTML is displayed as text; previews do not load remote images or execute note code. Saves retain the previous revision as `.bridge-bak`; keep normal vault backups because cross-application writes cannot be fully locked.
+### Optional Korean abstract translation
+
+Run **Tools → Zotero–Obsidian Connector: Configure…** and enable abstract translation. Enter an OpenAI-compatible `chat/completions` URL and model. The translation instruction keeps technical terms, methods, model and dataset names, acronyms, equations, code identifiers, organizations, and proper nouns in English.
+
+For a fully local setup with [Ollama](https://ollama.com/):
+
+```sh
+ollama pull qwen2.5:7b
+```
+
+Use these values in the connector:
+
+| Setting | Local Ollama value |
+| :--- | :--- |
+| **Endpoint** | `http://127.0.0.1:11434/v1/chat/completions` |
+| **Model** | `qwen2.5:7b` |
+| **API key** | Leave blank |
+
+Cloud services must use an HTTPS endpoint. If the service requires a Bearer key, enter it during configuration. The key is kept separately in local Zotero preferences and is never written to a Markdown note, status file, translation cache, or this repository.
+
+Translations are cached in `.zotero-bridge-translations.json` inside the configured notes folder. An unchanged abstract is not sent again. Changing the source abstract, endpoint, model, or translation prompt invalidates its cached translation. If the service is unavailable or returns invalid data, synchronization continues with the original abstract and records a translation fallback in the status file.
 
 ## Questions
 
@@ -160,9 +182,9 @@ The connector exports bibliographic metadata and abstracts. Standalone attachmen
 <details>
 <summary><strong>Where does my data go?</strong></summary>
 
-Notes are written to your selected local vault. The connector does not upload library metadata or include analytics. Published builds may contact GitHub to check for plugin updates. Your vault's sync services and other plugins operate independently.
+Notes are written to your selected local vault. The connector includes no analytics. When Korean translation is disabled, it does not send library metadata to a translation service. When translation is enabled, each uncached abstract is sent to the endpoint you configured. Published builds may contact GitHub to check for plugin updates. Your vault's sync services and other plugins operate independently.
 
-Generated notes, local settings, and status/error files can contain item keys, metadata, and filesystem paths. Review them before attaching them to public issue reports.
+Generated notes, the translation cache, local settings, and status/error files can contain item keys, metadata, translations, and filesystem paths. Review them before attaching them to public issue reports. Do not include an API key in a bug report.
 
 Each changed file keeps its previous version as `.bridge-bak`. This is not full version history, and concurrent external saves cannot be fully locked. Keep normal vault backups.
 

@@ -1,3 +1,12 @@
+## v0.3.0 — Optional Korean abstract translation
+
+Create literature notes with Korean abstracts through a user-configured OpenAI-compatible endpoint. The fixed translation instruction keeps technical terms, method/model/dataset names, acronyms, equations, code identifiers, organizations, and proper nouns in English.
+
+- Cache translations locally and translate again only when the source abstract, endpoint, model, or translation prompt changes.
+- Continue synchronization with the source abstract if translation fails.
+- Keep an optional Bearer key separate from the main connector configuration and require HTTPS for non-local endpoints.
+- Retain the Zotero Markdown tabs, shared-file editing, draft recovery, and external-change handling introduced in v0.2.0.
+
 ## v0.2.0 — Read and edit your Obsidian notes inside Zotero
 
 Right-click a paper or its PDF reader and choose **Open Obsidian note in Zotero tab**. A Markdown editor and preview open the same file used by Obsidian, using the connector's existing paper-to-note mapping.

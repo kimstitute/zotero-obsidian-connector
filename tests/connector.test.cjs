@@ -13,11 +13,13 @@ function fixture(options = {}) {
     Items:{getAll:async id=>items.filter(i=>i.libraryID===id&&!i.deleted),getAsync:async id=>items.find(i=>i.id===id)},
     getMainWindows:()=>[],logError:e=>errors.push(String(e)),launchURL:u=>launched.push(u),
     Notifier:{registerObserver:o=>(notify=o.notify,1),unregisterObserver:()=>{notify=null;}}};
+  if(options.http) Z.HTTP={request:options.http};
   const io = {makeDirectory:async()=>{},exists:async p=>p === path.join('C:/TestVault','.obsidian') || files.has(p),getChildren:async dir=>[...files.keys()].filter(p=>path.dirname(p)===dir),
     readUTF8:async p=>{if(!files.has(p))throw Error('missing');return files.get(p);},
     writeUTF8:async(p,s,o={})=>{if(o.mode==='create'&&files.has(p))throw Error('exists');if(o.backupFile)files.set(o.backupFile,files.get(p));files.set(p,s);}};
   const timers={setTimeout:f=>(pending=f,1),clearTimeout:()=>{pending=null;}};
-  return {bridge:createBridge({Z,io,path:{join:path.join,filename:path.basename,isAbsolute:path.isAbsolute,normalize:path.normalize},timers,config:options.unconfigured ? null : {vaultPath: "C:/TestVault",noteFolder: "Papers"}}),items,files,launched,errors,make,io,Z,prefs,notify:(...a)=>notify(...a),flush:async()=>{const f=pending;pending=null;if(f)f();await Promise.resolve();}};
+  const config = options.unconfigured ? null : {vaultPath: "C:/TestVault",noteFolder: "Papers",...(options.config || {})};
+  return {bridge:createBridge({Z,io,path:{join:path.join,filename:path.basename,isAbsolute:path.isAbsolute,normalize:path.normalize},timers,config,translate:options.translate,translationApiKey:options.translationApiKey}),items,files,launched,errors,make,io,Z,prefs,notify:(...a)=>notify(...a),flush:async()=>{const f=pending;pending=null;if(f)f();await Promise.resolve();}};
 }
 const dir='C:\\TestVault\\Papers';
 test('full library coverage, group keys separated, excluded feeds and repeat idempotence',async()=>{
@@ -115,4 +117,54 @@ test('session writes stop after disable and malformed identities cannot be saved
  await assert.rejects(session.save(base.text,'Missing markers'),/markers/);
  await assert.rejects(session.save(base.text,base.text.replace('## Abstract','## Overridden')),/managed by Zotero/);
  await f.bridge.stop(); assert.equal(await session.save(base.text,base.text+'Late'),null); assert.equal(f.files.get(base.file),base.text);
+});
+
+test('Korean abstract translation preserves configured English terms and reuses the local cache',async()=>{
+ let calls=0;
+ const f=fixture({config:{translateAbstracts:true,translationEndpoint:'http://127.0.0.1:11434/v1/chat/completions',translationModel:'qwen2.5:7b'},translate:async({abstract,systemPrompt})=>{
+   calls++;assert.equal(abstract,'초록');assert.match(systemPrompt,/technical terms/);return '한국어 번역: 3D Gaussian Splatting, ScanNet, CLIP';
+ }});
+ await f.bridge.start();assert.equal(calls,2);
+ const note=path.join(dir,'library-ABCD1234.md');
+ assert.match(f.files.get(note),/## Abstract \(한국어\)/);assert.match(f.files.get(note),/3D Gaussian Splatting, ScanNet, CLIP/);
+ await f.bridge.syncAll();const session=await f.bridge.createNoteSession(f.items[0]);
+ assert.equal(calls,2);assert.equal(f.bridge.lastResult.translationErrors.length,0);
+ assert.match((await session.read()).text,/## Abstract \(한국어\)/);
+ await f.bridge.stop();
+});
+
+test('translation cache invalidates on source changes and failures fall back to the source abstract',async()=>{
+ let calls=0,fail=false;
+ const f=fixture({config:{translateAbstracts:true,translationEndpoint:'https://translate.example/v1/chat/completions',translationModel:'model'},translate:async({abstract})=>{
+   calls++;if(fail)throw Error('offline');return '번역 '+abstract;
+ }});
+ await f.bridge.start();assert.equal(calls,2);
+ f.items[0].data.abstractNote='Changed abstract';await f.bridge.syncAll();assert.equal(calls,3);
+ fail=true;f.items[0].data.abstractNote='Newest abstract';await f.bridge.syncAll();
+ const note=f.files.get(path.join(dir,'library-ABCD1234.md'));
+ assert.match(note,/## Abstract\n\nNewest abstract/);assert.equal(f.bridge.lastResult.translationErrors.length,1);assert.equal(f.bridge.lastResult.errors.length,0);
+ await f.bridge.stop();
+});
+
+test('translation configuration rejects insecure remote URLs and keeps API keys out of the main config',async()=>{
+ const f=fixture({unconfigured:true});await f.bridge.start();
+ await assert.rejects(f.bridge.configure({vaultPath:'C:/TestVault',noteFolder:'Papers',translateAbstracts:true,translationEndpoint:'http://translate.example/v1/chat/completions',translationModel:'model'}),/HTTPS/);
+ await f.bridge.configure({vaultPath:'C:/TestVault',noteFolder:'Papers',translateAbstracts:true,translationEndpoint:'https://translate.example/v1/chat/completions',translationModel:'model',translationApiKey:'secret'});
+ assert.ok(!f.prefs.get('extensions.zotero-obsidian-connector.config').includes('secret'));
+ assert.equal(f.prefs.get('extensions.zotero-obsidian-connector.translationApiKey'),'secret');
+ await f.bridge.stop();
+});
+
+test('OpenAI-compatible translation sends the fixed instruction and optional Bearer key',async()=>{
+ const requests=[];
+ const f=fixture({config:{translateAbstracts:true,translationEndpoint:'https://translate.example/v1/chat/completions',translationModel:'translator'},translationApiKey:'token',http:async(method,url,options)=>{
+   requests.push({method,url,options});return {response:{choices:[{message:{content:'번역된 초록'}}]}};
+ }});
+ await f.bridge.start();assert.equal(requests.length,2);
+ const request=requests[0],body=JSON.parse(request.options.body);
+ assert.equal(request.method,'POST');assert.equal(request.url,'https://translate.example/v1/chat/completions');
+ assert.equal(request.options.headers.Authorization,'Bearer token');assert.equal(body.model,'translator');
+ assert.equal(body.temperature,0);assert.match(body.messages[0].content,/proper nouns in English/);assert.equal(body.messages[1].content,'초록');
+ assert.match(f.files.get(path.join(dir,'library-ABCD1234.md')),/## Abstract \(한국어\)\n\n번역된 초록/);
+ await f.bridge.stop();
 });

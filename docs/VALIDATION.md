@@ -1,5 +1,13 @@
 # Validation
 
+## v0.3.0 Korean abstract translation (2026-09-16)
+
+- **27 automated tests** pass across synchronization, shared-file editing, Zotero tabs, safe previews, and translation behavior.
+- Four translation tests cover the OpenAI-compatible request body and Bearer header, Korean abstract output, English-term preservation instructions, cache reuse and invalidation, source-abstract fallback, HTTPS validation, separation of API credentials from the main configuration, and reuse from the Zotero Markdown tab.
+- **20 integration checks** pass with the v0.3.0 source in an isolated Zotero **9.0.6** profile, covering plugin load, menus, Markdown tabs, shared-file saves, backups, external changes, conflicts, renamed notes, and shutdown cleanup.
+- The production XPI builds reproducibly, contains the v0.2.0 Markdown-tab modules, and passes private-path and credential-pattern scans.
+- Not yet verified: a live Ollama or cloud translation service inside Zotero. The translation service is mocked in automated tests, so service-specific compatibility remains to be checked.
+
 ## v0.2.0 internal Markdown tabs (2026-09-15)
 
 - **23 automated tests** pass: shared-file edits, metadata merging, external-edit conflicts, rename tracking, missing files, stopped sessions, draft recovery, pending-save races, tab cleanup, and safe previews.
@@ -21,7 +29,7 @@ Read the reported `result.json`. Profiles, vaults, logs, and detailed results st
 
 Validated on Windows with Zotero 9.0.6 and Obsidian 1.13.7.
 
-- All 11 automated tests pass.
+- All 11 synchronization tests passed at the time of this validation.
 - The packaged XPI installs and runs in Zotero.
 - Configuration dialogs render; configuration was submitted using Zotero's dialog API because desktop keyboard automation could not reliably focus the prompts.
 - A complete local library synchronizes without errors. Repeated synchronization is idempotent.

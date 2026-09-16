@@ -1,8 +1,8 @@
 {
   "manifest_version": 2,
   "name": "Zotero–Obsidian Connector",
-  "version": "0.2.0",
-  "description": "Automatic literature notes and a Zotero tab to read and edit the same Markdown files as Obsidian.",
+  "version": "0.3.0",
+  "description": "Automatic literature notes, Korean abstract translation, and a shared Markdown editor for Zotero and Obsidian.",
   "author": "Zotero–Obsidian Connector contributors",
   "icons": {"48": "icons/icon-48.png", "96": "icons/icon-96.png"},
   "applications": {
