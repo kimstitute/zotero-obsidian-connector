@@ -1,6 +1,15 @@
 # Validation
 
-## v0.4.0 Codex OAuth translation (2026-09-16)
+## v0.4.1 shared Codex OAuth session (2026-09-16)
+
+- **33 automated tests** pass across synchronization, shared-file editing, Zotero tabs, safe previews, API translation, and Codex OAuth translation.
+- OAuth tests cover AIdea/Codex session discovery without a CLI executable, JWT expiry handling, account routing headers, request payload minimization, streamed response parsing, browser-login fallback, and preventing token copies in plugin-managed files.
+- Expired or missing credentials fail before the abstract request. Only the source abstract and translation instruction are included in the Codex request.
+- A live request using an existing AIdea/Codex OAuth session succeeded both from the standalone module and inside an isolated Zotero **9.0.6** profile. The test used a synthetic public sentence, not a library item.
+- The standard **21-check** Zotero integration suite remains independent of account access and does not make a model request.
+- The ChatGPT Codex backend is not a public third-party API and remains subject to upstream protocol changes.
+
+## v0.4.0 Codex CLI translation (2026-09-16)
 
 - **31 automated tests** pass across synchronization, shared-file editing, Zotero tabs, safe previews, API translation, and Codex CLI translation.
 - Codex tests cover executable discovery, CLI-owned login, provider migration, provider-aware caching, ephemeral read-only execution, structured output parsing, temporary-file cleanup, and keeping abstract text out of process arguments.

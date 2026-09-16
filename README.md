@@ -33,7 +33,7 @@ Keep references in Zotero and your thinking in Obsidian. The connector creates o
 
 **Zotero library → Markdown notes → Title dashboard**
 
-Open a note from Zotero, or follow its backlink to the original item. The core connector needs no API key, AI service, or Obsidian community plugin. Korean abstract translation is optional; the default translation path uses ChatGPT sign-in through the official Codex CLI, with an OpenAI-compatible endpoint retained as an advanced option.
+Open a note from Zotero, or follow its backlink to the original item. The core connector needs no API key, AI service, or Obsidian community plugin. Korean abstract translation is optional; the default translation path reuses a local Codex OAuth login created by AIdea or Codex, with an OpenAI-compatible endpoint retained as an advanced option.
 
 Opening a paper or dashboard from Zotero uses a **new Obsidian tab**, keeping your current tab in place.
 
@@ -136,14 +136,15 @@ This is a basic Markdown editor, not the embedded Obsidian application. The prev
 
 Run **Tools → Zotero–Obsidian Connector: Configure…** and enable abstract translation. Choose one of two providers. The translation instruction keeps technical terms, methods, model and dataset names, acronyms, equations, code identifiers, organizations, and proper nouns in English.
 
-#### ChatGPT sign-in through Codex CLI (default)
+#### Reuse an AIdea/Codex OAuth login (default)
 
-1. Install the official [Codex CLI](https://developers.openai.com/codex/cli).
-2. In the connector configuration, choose **1 = ChatGPT sign-in through Codex CLI**.
-3. If needed, the connector starts the Codex browser sign-in. You can also run **Tools → Zotero–Obsidian Connector: Sign in to ChatGPT…** later.
-4. Leave the model override blank to use the Codex CLI default.
+1. Sign in to **ChatGPT (Codex OAuth)** from AIdea, or sign in with the official [Codex CLI](https://developers.openai.com/codex/cli).
+2. In the connector configuration, choose **1 = ChatGPT (reuse AIdea/Codex OAuth login)**.
+3. Leave the model override blank to use `gpt-5.6-luna`.
 
-The plugin never reads or stores Codex OAuth tokens. It asks the installed CLI to check sign-in and perform each translation. The abstract is written to a short-lived temporary file, translated in an ephemeral read-only Codex run, and removed afterward. Usage counts against the limits of the ChatGPT/Codex account used to sign in.
+The connector reads the access token from the local Codex `auth.json` only when checking the account or making a translation request. It sends the token and uncached abstract directly to `https://chatgpt.com/backend-api/codex/responses`; it never copies refresh or access tokens into Zotero preferences, Markdown notes, translation caches, status files, or logs. Usage counts against the signed-in ChatGPT/Codex account's limits.
+
+This flow follows Codex's local authentication and backend protocol, but the backend is not a public third-party API and may change. The configuration dialog explains this before enabling it. If the session expires, sign in again from AIdea or Codex.
 
 #### OpenAI-compatible endpoint (advanced)
 
@@ -195,7 +196,7 @@ The connector exports bibliographic metadata and abstracts. Standalone attachmen
 <details>
 <summary><strong>Where does my data go?</strong></summary>
 
-Notes are written to your selected local vault. The connector includes no analytics. When Korean translation is disabled, it does not send library metadata to a translation service. When translation is enabled, each uncached abstract is sent either through the signed-in Codex CLI to OpenAI or to the endpoint you configured. No title, author list, PDF, personal note, or vault file is added to the translation request. Published builds may contact GitHub to check for plugin updates. Your vault's sync services and other plugins operate independently.
+Notes are written to your selected local vault. The connector includes no analytics. When Korean translation is disabled, it does not send library metadata to a translation service. When translation is enabled, each uncached abstract is sent either directly to the ChatGPT Codex backend with the local OAuth session or to the endpoint you configured. No title, author list, PDF, personal note, or other vault file is added to the translation request. Published builds may contact GitHub to check for plugin updates. Your vault's sync services and other plugins operate independently.
 
 Generated notes, the translation cache, local settings, and status/error files can contain item keys, metadata, translations, and filesystem paths. Review them before attaching them to public issue reports. Do not include an API key in a bug report.
 

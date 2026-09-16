@@ -105,19 +105,20 @@ function createBridge(deps) {
     let translationProvider, translationEndpoint, translationModel, codexModel, key;
     if (enabled) {
       const defaults = translationDefaults(config || {});
-      const choice = window.prompt('Translation provider:\n\n1 = ChatGPT sign-in through Codex CLI (no API key)\n2 = OpenAI-compatible endpoint\n\nEnter 1 or 2:', defaults.provider === 'api' ? '2' : '1');
+      const choice = window.prompt('Translation provider:\n\n1 = ChatGPT (reuse AIdea/Codex OAuth login; no API key)\n2 = OpenAI-compatible endpoint\n\nEnter 1 or 2:', defaults.provider === 'api' ? '2' : '1');
       if (choice === null) return;
       translationProvider = choice.trim() === '2' ? 'api' : choice.trim() === '1' ? 'codex' : '';
       if (!translationProvider) throw new Error('Enter 1 for Codex OAuth or 2 for an API endpoint.');
       if (translationProvider === 'codex') {
         if (!codex) throw new Error('Codex translation support is unavailable. Reinstall the connector.');
         const state = await codex.status();
-        if (!state.installed) throw new Error('Codex CLI was not found. Install Codex CLI, restart Zotero, and configure again.');
+        if (!state.installed) throw new Error('No Codex OAuth login was found. Sign in from AIdea settings, then configure again.');
         if (!state.signedIn) {
-          if (!window.confirm('Codex CLI is installed but is not signed in to ChatGPT. Start sign-in now?')) return;
+          if (!window.confirm('Codex OAuth is not signed in. Start the Codex browser sign-in now?\n\nYou can also sign in from AIdea settings first.')) return;
           await codex.login();
         }
-        codexModel = window.prompt('Optional Codex model override. Leave blank to use the Codex CLI default:', defaults.codexModel);
+        if (!window.confirm('Use the local Codex OAuth session for abstract translation?\n\nThe connector reads the local Codex auth file only when needed and sends its access token and the uncached abstract directly to chatgpt.com. The token is never copied to plugin settings, notes, caches, or logs. This backend integration is not an official third-party API and may change.')) return;
+        codexModel = window.prompt('Optional Codex model override. Leave blank to use gpt-5.6-luna:', defaults.codexModel);
         if (codexModel === null) return;
       } else {
         translationEndpoint = window.prompt('OpenAI-compatible chat completions URL:', defaults.endpoint);
@@ -444,16 +445,16 @@ function createBridge(deps) {
       parent.appendChild(node); nodes.push(node);
     }
     menu('menu_ToolsPopup', 'zoc-configure', 'Zotero–Obsidian Connector: Configure…', () => configureWindow(window));
-    menu('menu_ToolsPopup', 'zoc-codex-login', 'Zotero–Obsidian Connector: Sign in to ChatGPT…', async () => {
+    menu('menu_ToolsPopup', 'zoc-codex-login', 'Zotero–Obsidian Connector: Check ChatGPT OAuth…', async () => {
       if (!codex) throw new Error('Codex translation support is unavailable. Reinstall the connector.');
       const state = await codex.status();
-      if (!state.installed) throw new Error('Codex CLI was not found. Install Codex CLI, restart Zotero, and try again.');
+      if (!state.installed) throw new Error('No Codex OAuth login was found. Sign in from AIdea settings, or install Codex CLI and try again.');
       if (state.signedIn) {
-        window.alert('Codex CLI is signed in to ChatGPT.');
+        window.alert('The local Codex OAuth session is signed in to ChatGPT and ready for translation.');
         return;
       }
       await codex.login();
-      window.alert('Codex CLI is now signed in to ChatGPT.');
+      window.alert('The local Codex OAuth session is now signed in and ready for translation.');
     });
     menu('menu_ToolsPopup', 'zoc-dashboard', 'Open literature dashboard in Obsidian', async () => {
       await syncAll();

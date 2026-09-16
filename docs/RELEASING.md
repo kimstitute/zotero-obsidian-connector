@@ -11,7 +11,7 @@ npm test
 python scripts/build.py --repository OWNER/REPOSITORY
 ```
 
-4. Create a release tag such as `v0.4.0` matching `src/manifest.json` and `package.json`.
+4. Create a release tag such as `v0.4.1` matching `src/manifest.json` and `package.json`.
 5. Attach the generated XPI, its `.sha256` file, and `updates.json` from `dist/` to that release. Mark it as the latest release if you want the latest-download update endpoint to resolve to it.
 
 The build script writes the correct versioned XPI URL and SHA-256 hash into `updates.json`. It includes no filesystem paths, local preferences, credentials, or library exports. Archive entries have fixed timestamps and permissions.

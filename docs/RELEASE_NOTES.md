@@ -1,3 +1,16 @@
+## v0.4.1 — Reuse AIdea/Codex OAuth login
+
+Fix the “Codex CLI was not found” setup failure by reusing the local Codex OAuth session already created by AIdea or Codex.
+
+- Detect a valid local Codex OAuth session before looking for a CLI executable.
+- Send uncached abstracts directly to the ChatGPT Codex backend and parse its streamed response.
+- Read credentials only at request time; never copy tokens into plugin preferences, notes, caches, status files, or logs.
+- Keep browser login through the official Codex executable as a fallback when no shared session exists.
+- Reject expired credentials without sending an abstract and direct the user to sign in again from AIdea or Codex.
+- Preserve the OpenAI-compatible API/Ollama option and all v0.4.0 synchronization and editor behavior.
+
+This backend is not a public third-party API and may change. Requests use the signed-in account's Codex allowance.
+
 ## v0.4.0 — ChatGPT sign-in for Korean abstract translation
 
 Translate abstracts without entering an API key by delegating authentication and model requests to the official Codex CLI.

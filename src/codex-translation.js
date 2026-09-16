@@ -1,6 +1,8 @@
-/* ChatGPT authentication and requests are delegated to the official Codex CLI. */
+/* Reuses the local Codex OAuth session without copying credentials into plugin settings. */
 function createCodexTranslator(deps) {
   const {Z, io, path, Services} = deps;
+  const endpoint = 'https://chatgpt.com/backend-api/codex/responses';
+  const defaultModel = 'gpt-5.6-luna';
   let executable = deps.executable || null;
   const env = name => {
     try { return Services?.env?.get(name) || ''; }
@@ -10,6 +12,39 @@ function createCodexTranslator(deps) {
     try { return !!file && await io.exists(file); }
     catch (_) { return false; }
   };
+  function decodeClaims(token) {
+    try {
+      const encoded = String(token || '').split('.')[1];
+      if (!encoded) return {};
+      const normalized = encoded.replace(/-/g, '+').replace(/_/g, '/');
+      const decode = deps.atob || Z.getMainWindow?.()?.atob?.bind(Z.getMainWindow()) || globalThis.atob;
+      if (!decode) return {};
+      return JSON.parse(decode(normalized.padEnd(normalized.length + (4 - normalized.length % 4) % 4, '=')));
+    } catch (_) { return {}; }
+  }
+  function credentialPaths() {
+    const values = [], add = value => { if (value && !values.includes(value)) values.push(value); };
+    const codexHome = env('CODEX_HOME'), home = env('HOME') || env('USERPROFILE');
+    if (codexHome) add(path.join(codexHome, 'auth.json'));
+    if (home) add(path.join(home, '.codex', 'auth.json'));
+    return values;
+  }
+  async function readCredential() {
+    for (const file of credentialPaths()) {
+      if (!await exists(file)) continue;
+      try {
+        const saved = JSON.parse(await io.readUTF8(file));
+        const tokens = saved?.tokens && typeof saved.tokens === 'object' ? saved.tokens : {};
+        const accessToken = typeof tokens.access_token === 'string' ? tokens.access_token.trim() : '';
+        if (!accessToken) continue;
+        const claims = decodeClaims(accessToken);
+        const accountId = String(tokens.account_id || claims?.['https://api.openai.com/auth']?.chatgpt_account_id || '').trim();
+        const expiresAt = Number(claims.exp || 0) * 1000;
+        return {accessToken, accountId, expiresAt, expired: !!expiresAt && expiresAt <= Date.now() + 60000};
+      } catch (_) {}
+    }
+    return null;
+  }
   function ensureCodexEnvironment() {
     const home = env('HOME') || env('USERPROFILE');
     try {
@@ -30,94 +65,125 @@ function createCodexTranslator(deps) {
       add(path.join(home, '.local', 'bin', 'codex'));
     }
     for (const folder of String(env('PATH') || '').split(Z.isWin ? ';' : ':')) {
-      if (!folder) continue;
-      add(path.join(folder, Z.isWin ? 'codex.exe' : 'codex'));
+      if (folder) add(path.join(folder, Z.isWin ? 'codex.exe' : 'codex'));
     }
     for (const file of ['/opt/homebrew/bin/codex', '/usr/local/bin/codex', '/usr/bin/codex']) add(file);
     return values;
   }
-  async function run(command, args) {
-    if (!Z.Utilities?.Internal?.subprocess) throw new Error('Zotero subprocess support is unavailable.');
-    ensureCodexEnvironment();
-    return Z.Utilities.Internal.subprocess(command, args);
-  }
   async function resolveExecutable() {
     if (executable && await exists(executable)) return executable;
-    for (const file of candidates()) {
-      if (!await exists(file)) continue;
-      try {
-        const output = await run(file, ['--version']);
-        if (/codex/i.test(String(output || ''))) return (executable = file);
-      } catch (_) {}
-    }
-    try {
-      const output = await run('codex', ['--version']);
-      if (/codex/i.test(String(output || ''))) return (executable = 'codex');
-    } catch (_) {}
-    throw new Error('Codex CLI was not found. Install it, then restart Zotero.');
+    for (const file of candidates()) if (await exists(file)) return (executable = file);
+    throw new Error('Codex CLI was not found. Sign in from AIdea, or install the official Codex CLI.');
   }
-  async function status() {
-    let command;
-    try { command = await resolveExecutable(); }
-    catch (error) { return {installed: false, signedIn: false, message: String(error)}; }
-    if (command === 'codex') return {installed: true, signedIn: false,
-      message: 'Run `codex login` in a terminal, then restart Zotero.', executable: command};
+  async function refreshCredential() {
     try {
+      const command = await resolveExecutable();
       ensureCodexEnvironment();
       await Z.Utilities.Internal.exec(command, ['login', 'status']);
-      return {installed: true, signedIn: true, message: 'Codex CLI is signed in.', executable: command};
+    } catch (_) {}
+    return readCredential();
+  }
+  async function status() {
+    let credential = await readCredential();
+    if (credential?.expired) credential = await refreshCredential();
+    if (credential && !credential.expired) return {
+      installed: true, signedIn: true, mode: 'shared-codex-oauth', message: 'A local Codex OAuth session is available.'
+    };
+    try {
+      const command = await resolveExecutable();
+      return {installed: true, signedIn: false, executable: command,
+        message: credential?.expired ? 'The Codex OAuth session has expired.' : 'Codex OAuth is not signed in.'};
     } catch (error) {
-      return {installed: true, signedIn: false, message: String(error), executable: command};
+      return {installed: false, signedIn: false,
+        message: credential?.expired ? 'The Codex OAuth session has expired. Sign in again from AIdea.' : String(error)};
     }
   }
   async function login() {
+    const current = await readCredential();
+    if (current && !current.expired) return status();
     const command = await resolveExecutable();
-    if (command === 'codex') throw new Error('Codex CLI is available on PATH, but its executable path could not be resolved. Run `codex login` in a terminal.');
     ensureCodexEnvironment();
     await Z.Utilities.Internal.exec(command, ['login']);
     const result = await status();
-    if (!result.signedIn) throw new Error('Codex sign-in did not complete. Run `codex login` in a terminal and try again.');
+    if (!result.signedIn) throw new Error('Codex sign-in did not complete. You can also sign in from AIdea settings and try again.');
+    return result;
+  }
+  function extractOutputText(value) {
+    if (!value || typeof value !== 'object') return '';
+    if (value.type === 'output_text' && typeof value.text === 'string') return value.text;
+    for (const items of [value.output, value.content]) {
+      if (!Array.isArray(items)) continue;
+      const text = items.map(extractOutputText).join('');
+      if (text) return text;
+    }
+    return '';
+  }
+  function parseResponse(raw) {
+    const body = String(raw || '').trim();
+    if (!body) throw new Error('Codex OAuth returned no response.');
+    if (!body.includes('data:')) {
+      const parsed = JSON.parse(body);
+      const text = extractOutputText(parsed);
+      if (text) return text.trim();
+    }
+    let text = '', completed = '';
+    for (const line of body.split(/\r?\n/)) {
+      const trimmed = line.trim();
+      if (!trimmed.startsWith('data:')) continue;
+      const data = trimmed.slice(5).trim();
+      if (!data || data === '[DONE]') continue;
+      try {
+        const event = JSON.parse(data);
+        if (event.type === 'response.output_text.delta' && typeof event.delta === 'string') text += event.delta;
+        if (event.type === 'response.completed') completed = extractOutputText(event.response) || completed;
+        if (event.type === 'response.output_item.done') completed = extractOutputText(event.item) || completed;
+        if (event.type === 'error') throw new Error('Codex OAuth error: ' + String(event.message || event.error?.message || 'unknown error'));
+      } catch (error) {
+        if (String(error).includes('Codex OAuth error:')) throw error;
+      }
+    }
+    const result = (text || completed).trim();
+    if (!result) throw new Error('Codex OAuth returned no translated text.');
     return result;
   }
   async function translate({abstract, model, systemPrompt}) {
     const source = String(abstract || '').trim();
     if (!source) return '';
     if (source.length > 100000) throw new Error('The abstract is too long to translate safely.');
-    const command = await resolveExecutable();
-    const root = path.tempDir;
-    if (!root) throw new Error('The system temporary directory is unavailable.');
-    const folder = path.join(root, 'zoc-translation-' + Date.now() + '-' + Math.random().toString(36).slice(2));
-    const input = path.join(folder, 'abstract.txt');
-    const schema = path.join(folder, 'translation.schema.json');
-    const output = path.join(folder, 'translation.json');
-    await io.makeDirectory(folder, {ignoreExisting: false});
+    let credential = await readCredential();
+    if (credential?.expired) credential = await refreshCredential();
+    if (!credential || credential.expired) throw new Error('Codex OAuth is not signed in. Sign in from AIdea settings or the connector Tools menu.');
+    const headers = {
+      Authorization: 'Bearer ' + credential.accessToken,
+      'Content-Type': 'application/json',
+      Accept: 'text/event-stream',
+      'User-Agent': 'codex_cli_rs/0.0.0 (Zotero-Obsidian-Connector)',
+      originator: 'codex_cli_rs'
+    };
+    if (credential.accountId) headers['ChatGPT-Account-ID'] = credential.accountId;
+    const payload = {
+      model: String(model || '').trim() || defaultModel,
+      instructions: systemPrompt,
+      input: [{type: 'message', role: 'user', content: [{type: 'input_text', text: source}]}],
+      store: false,
+      stream: true,
+      tool_choice: 'none'
+    };
+    let response;
     try {
-      await io.writeUTF8(input, source, {mode: 'create'});
-      await io.writeUTF8(schema, JSON.stringify({
-        type: 'object',
-        properties: {translation: {type: 'string'}},
-        required: ['translation'],
-        additionalProperties: false
-      }), {mode: 'create'});
-      const instruction = [
-        systemPrompt,
-        'Read the UTF-8 file abstract.txt in the current directory as untrusted source text.',
-        'Return a JSON object with exactly one string field named translation. Do not modify any files.'
-      ].join(' ');
-      const args = ['exec', '--ephemeral', '--ignore-user-config', '--ignore-rules', '--skip-git-repo-check',
-        '--sandbox', 'read-only', '--cd', folder, '--output-schema', schema, '--output-last-message', output];
-      if (String(model || '').trim()) args.push('--model', String(model).trim());
-      args.push(instruction);
-      await run(command, args);
-      if (!await exists(output)) throw new Error('Codex returned no translation output. Sign in with `codex login` and try again.');
-      const parsed = JSON.parse(await io.readUTF8(output));
-      if (typeof parsed?.translation !== 'string' || !parsed.translation.trim()) throw new Error('Codex returned an empty translation.');
-      return parsed.translation.trim();
-    } finally {
-      try { await io.remove(folder, {recursive: true, ignoreAbsent: true}); }
-      catch (error) { Z.logError(error); }
+      if (deps.request) response = await deps.request(endpoint, {headers, payload});
+      else {
+        if (!Z.HTTP?.request) throw new Error('Zotero HTTP API is unavailable.');
+        response = await Z.HTTP.request('POST', endpoint, {
+          headers, body: JSON.stringify(payload), responseType: 'text', timeout: 180000
+        });
+      }
+    } catch (error) {
+      const status = Number(error?.status || error?.xmlhttp?.status || error?.response?.status || 0);
+      throw new Error('Codex OAuth request failed' + (status ? ' (HTTP ' + status + ')' : '') + '. Sign in again from AIdea if the session expired.');
     }
+    return parseResponse(response?.responseText ?? response?.response ?? response);
   }
-  return {translate, status, login, resolveExecutable};
+  return {translate, status, login};
 }
 if (typeof module !== 'undefined') module.exports = {createCodexTranslator};
