@@ -34,15 +34,20 @@ Zotero 논문을 Obsidian Markdown 노트로 자동 생성하고 양쪽 앱을 �
 
 설정 과정에서 **초록 한국어 번역**을 켤 수 있습니다. 번역 시 전문용어, 방법·모델·데이터셋 이름, 약어, 수식, 코드 식별자와 고유명사는 영어로 유지합니다.
 
-기본 방식은 **AIdea/Codex OAuth 로그인 재사용**입니다.
+기본 방식은 **커넥터 자체의 ChatGPT 로그인**입니다. AIdea, Codex CLI, Node.js나 다른 플러그인을 설치할 필요가 없습니다.
 
-1. AIdea 설정의 **ChatGPT (Codex OAuth)**에서 로그인하거나 공식 [Codex CLI](https://developers.openai.com/codex/cli)로 로그인합니다.
-2. 커넥터 설정에서 `1 = ChatGPT (reuse AIdea/Codex OAuth login)`을 선택합니다.
-3. 모델 입력은 비워 두면 `gpt-5.6-luna`를 사용합니다.
+1. **도구 → Zotero–Obsidian Connector: ChatGPT login…**을 누르거나 커넥터 설정에서 `1 = ChatGPT`를 선택합니다.
+2. Zotero에 표시된 일회용 코드를 브라우저의 OpenAI 페이지에 입력합니다. 안내가 나오면 **ChatGPT 설정 → 보안**에서 기기 코드 인증을 활성화합니다. 계정 또는 워크스페이스가 Codex 기기 인증을 허용해야 합니다. [OpenAI 인증 안내](https://developers.openai.com/codex/auth/)
+3. 승인 후 Zotero로 돌아와 **Configure…**에서 한국어 번역을 켭니다. 모델 입력은 비워 두면 `gpt-5.6-luna`를 사용합니다.
+4. **Sync literature notes to Obsidian**을 실행하면 캐시에 없는 초록을 번역합니다.
 
-커넥터는 계정 상태 확인과 번역 요청 시 로컬 Codex `auth.json`의 access token을 읽습니다. access token과 캐시에 없는 초록은 `https://chatgpt.com/backend-api/codex/responses`로 직접 전송합니다. access token과 refresh token은 Zotero 환경설정, Markdown, 번역 캐시, 상태 파일이나 로그에 복사하지 않습니다. 번역 사용량은 로그인한 ChatGPT/Codex 계정의 사용 한도에 포함됩니다.
+커넥터는 자체 로그인 정보를 Zotero의 암호화된 비밀번호 저장소에 보관하고 만료된 access token을 자동으로 갱신합니다. 다른 앱의 인증 파일은 읽거나 수정하지 않습니다. access token과 캐시에 없는 초록만 `https://chatgpt.com/backend-api/codex/responses`로 직접 전송합니다. OAuth 토큰은 일반 환경설정, Markdown, 번역 캐시, 상태 파일이나 디버그 로그에 기록하지 않습니다. 번역 사용량은 로그인한 ChatGPT/Codex 계정의 사용 한도에 포함됩니다.
 
-이 방식은 Codex의 로컬 인증 및 백엔드 프로토콜을 따르지만 공개된 제3자 API는 아니므로 향후 변경될 수 있습니다. 설정 과정에서 이 내용을 확인한 뒤 활성화합니다. 인증이 만료되면 AIdea 또는 Codex에서 다시 로그인하세요.
+**ChatGPT sign out** 메뉴로 커넥터의 저장된 로그인을 삭제하거나 계정을 바꿀 수 있습니다. 플러그인을 비활성화하면 진행 중인 요청은 취소하고 로그인은 유지합니다. 로컬 로그아웃은 OpenAI 서버의 세션을 해지하지는 않습니다.
+
+**v0.4.0/v0.4.1에서 업데이트할 때:** AIdea나 Codex에 로그인되어 있어도 커넥터에서 한 번 새로 로그인해야 합니다. 기존 노트 설정과 번역 캐시는 유지됩니다.
+
+이 방식은 Codex 기기 OAuth와 백엔드 프로토콜을 직접 구현하며 공개된 공식 제3자 ChatGPT API는 아니므로 향후 변경될 수 있습니다. 로그인 전에 이를 안내합니다. 갱신에 실패하거나 워크스페이스에서 기기 인증을 차단한 경우 계정 설정을 확인하고 커넥터에서 다시 로그인하세요.
 
 `2 = OpenAI-compatible endpoint`를 선택하면 기존 API 방식도 사용할 수 있습니다. 아래 Ollama 설정이나 HTTPS 기반 호환 서비스를 사용하는 고급 옵션입니다.
 
@@ -84,6 +89,6 @@ Zotero에서 논문 노트나 대시보드를 열면 **Obsidian의 새 탭**에�
 
 번역을 켜면 캐시에 없는 Zotero 초록이 로컬 Codex OAuth 인증과 함께 ChatGPT Codex 백엔드 또는 설정한 번역 서버로 전송됩니다. 제목, 저자, PDF, 개인 메모와 다른 vault 파일은 번역 요청에 포함하지 않습니다. 번역을 끄면 번역 서비스로 메타데이터를 보내지 않습니다. 생성된 노트, 번역 캐시, 로컬 설정과 오류 로그에는 개인 데이터가 포함될 수 있으므로 공개 저장소나 이슈에 올리기 전에 확인하세요.
 
-공개용 초기 버전입니다. Windows에서 실제 동기화, 메모 보존, 파일명 변경, Obsidian 문서 열기를 확인했고 자동 테스트 33개가 통과했습니다. AIdea/Codex 인증 재사용과 응답 처리를 검증했으며 macOS/Linux는 추가 검증이 필요합니다. [검증 범위](VALIDATION.md)
+공개용 초기 버전입니다. Windows에서 실제 동기화, 메모 보존, 파일명 변경, Obsidian 문서 열기를 확인했습니다. 독립 로그인과 응답 처리 검증 범위 및 한계는 [검증 기록](VALIDATION.md)을 참고하세요. macOS/Linux는 추가 검증이 필요합니다.
 
 코드에는 개인 보관함 경로나 실제 논문 목록이 포함되지 않습니다. 사용 중 생성되는 노트·설정·오류 로그는 개인 데이터를 포함할 수 있으니 공개 저장소에 올리지 마세요.

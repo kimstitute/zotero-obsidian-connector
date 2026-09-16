@@ -1,12 +1,76 @@
 // Only injected into a new test profile; never shipped in the XPI.
 (async () => {
   const result={ok:false,version:Zotero.version,checks:[]};
-  const check=(name,value)=>{result.checks.push({name,pass:!!value});if(!value)throw Error(name);};
+  const check=(name,value)=>{Zotero.debug('Connector smoke: '+name+' = '+!!value);result.checks.push({name,pass:!!value});if(!value)throw Error(name);};
   try {
     check('isolated profile',Zotero.Profile.dir===__PROFILE__);
     const w=Zotero.getMainWindow(), bridge=Zotero.ObsidianConnector;
     check('internal note menu installed',!!w.document.getElementById('zoc-note-tab'));
     check('Codex sign-in menu installed',!!w.document.getElementById('zoc-codex-login'));
+    check('ChatGPT sign-out menu installed',!!w.document.getElementById('zoc-codex-logout'));
+    const oauthScope = {};
+    Services.scriptloader.loadSubScript(Services.io.newFileURI(Zotero.File.pathToFile(PathUtils.join(__PROFILE__, 'extensions', 'zotero-obsidian-connector@local', 'codex-translation.js'))).spec, oauthScope);
+    const authRequests = [];
+    const fakeToken = 'test.' + w.btoa(JSON.stringify({exp:Math.floor(Date.now()/1000)+3600,'https://api.openai.com/auth':{chatgpt_account_id:'isolated-test'}})) + '.signature';
+    const authDeps = {Z:Zotero, Services, timers:w, request:async(url,options)=>{
+      authRequests.push({url,options});
+      if(url.endsWith('/usercode'))return {device_auth_id:'test-device',user_code:'TEST-ONLY',interval:'5'};
+      if(url.endsWith('/deviceauth/token'))return {authorization_code:'test-code',code_verifier:'test-verifier'};
+      if(url.endsWith('/oauth/token'))return {access_token:fakeToken,refresh_token:'synthetic-refresh'};
+      return 'data: {"type":"response.output_text.delta","delta":"Point Cloud를 분석한다."}\n\ndata: {"type":"response.completed","response":{"status":"completed"}}\n';
+    }};
+    const auth = oauthScope.createCodexTranslator(authDeps);
+    check('fresh profile has no shared login',(await auth.status()).signedIn===false);
+    await auth.login({onCode:code=>check('standalone device code callback',code.userCode==='TEST-ONLY')});
+    check('standalone login stored in Zotero password manager',(await auth.status()).signedIn);
+    const authRestart = oauthScope.createCodexTranslator(authDeps);
+    check('connector login reloads independently',(await authRestart.status()).signedIn);
+    check('standalone translation uses stored credential',await authRestart.translate({abstract:'Analyze Point Cloud.',systemPrompt:'Translate.'})==='Point Cloud를 분석한다.');
+    await authRestart.logout();
+    check('standalone logout removes credential',!(await auth.status()).signedIn);
+    const nativeAuth = oauthScope.createCodexTranslator({Z:Zotero,Services,timers:w});
+    const savedFetch=w.fetch;
+    let fetchCount=0;
+    try {
+      w.fetch=async(url,options)=>{fetchCount++;check('OAuth fetch disables redirects and cookies',options.redirect==='error' && options.credentials==='omit');
+        return {ok:true,text:async()=>JSON.stringify({device_auth_id:'test',user_code:'TEST-ONLY',interval:5})};};
+      try {await nativeAuth.login({onCode:({cancel})=>cancel()});}catch(error){check('native request cancellation',String(error).includes('cancelled'));}
+      check('native OAuth transport works in Zotero',fetchCount===1);
+    } finally {w.fetch=savedFetch;}
+    const originalConfirm=w.confirm, originalAlert=w.alert, originalLaunch=Zotero.launchURL;
+    let approveLogin, browserURL='', success=false, loginError='';
+    const approval=new Promise(resolve=>approveLogin=resolve);
+    try {
+      w.confirm=()=>true;
+      w.alert=message=>{if(message.startsWith('ChatGPT sign-in complete'))success=true;else loginError=message;};
+      Zotero.launchURL=url=>{browserURL=url;};
+      w.fetch=async(url,options)=>{
+        if(url.endsWith('/deviceauth/token'))await approval;
+        const response=await authDeps.request(url,{payload:options.body});
+        return {ok:true,text:async()=>typeof response==='string'?response:JSON.stringify(response)};
+      };
+      w.document.getElementById('zoc-codex-login').dispatchEvent(new w.Event('command'));
+      for(let attempt=0;attempt<100&&!browserURL&&!loginError;attempt++)await Zotero.Promise.delay(20);
+      const loginPanel=w.document.getElementById('zoc-chatgpt-login-panel');
+      check('standalone login panel displays device code',loginPanel?.querySelector('input')?.value==='TEST-ONLY');
+      check('login panel has visible layout',loginPanel.getBoundingClientRect().width>400 && loginPanel.querySelector('input').getBoundingClientRect().height>20);
+      check('login opens only the OpenAI device page',browserURL==='https://auth.openai.com/codex/device');
+      approveLogin();
+      for(let attempt=0;attempt<100&&!success&&!loginError;attempt++)await Zotero.Promise.delay(20);
+      check('menu login completes and removes panel',success&&!w.document.getElementById('zoc-chatgpt-login-panel'));
+      const passwordFile=PathUtils.join(__PROFILE__,'logins.json');
+      for(let attempt=0;attempt<200&&!await IOUtils.exists(passwordFile);attempt++)await Zotero.Promise.delay(20);
+      check('password manager persisted encrypted login',await IOUtils.exists(passwordFile) && !(await IOUtils.readUTF8(passwordFile)).includes('synthetic-refresh') && !(await IOUtils.readUTF8(passwordFile)).includes(fakeToken));
+      await nativeAuth.logout();
+    } finally {approveLogin();w.fetch=savedFetch;w.confirm=originalConfirm;w.alert=originalAlert;Zotero.launchURL=originalLaunch;}
+    // Optional live contract probe creates a device code then cancels; it never logs in or translates.
+    if (__LIVE_OAUTH__) {
+      let issued=false;
+      try {await nativeAuth.login({onCode:({userCode,cancel})=>{issued=typeof userCode==='string'&&userCode.length>0;cancel();}});}
+      catch(error){if(!issued)throw error;}
+      check('live OpenAI device code issued without CLI or shared auth',issued);
+      check('live probe leaves connector signed out',!(await nativeAuth.status()).signedIn);
+    }
     const item=new Zotero.Item('journalArticle');
     item.setField('title','Internal note editor — 한글 검증'); item.setField('abstractNote','<script>throw Error("unsafe")</script>'); await item.saveTx();
     await bridge.configure({vaultPath:__VAULT__,noteFolder:'Papers'});

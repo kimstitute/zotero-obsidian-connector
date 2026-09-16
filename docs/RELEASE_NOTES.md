@@ -1,3 +1,15 @@
+## v0.4.2 — Independent ChatGPT login
+
+ChatGPT translation now works without AIdea, Codex CLI, Node.js, or shared authentication files.
+
+- Sign in directly from **Tools → Zotero–Obsidian Connector: ChatGPT login…** using a browser and one-time device code.
+- Store a connector-owned login in Zotero's encrypted password manager; refresh tokens automatically.
+- Add cancellation and local sign-out. Prevent late login/refresh responses from restoring a signed-out session.
+- Keep token exchange bodies out of Zotero HTTP debug logs, retry unauthorized translations once after refreshing, and reject incomplete streamed output.
+- Preserve note configuration, cached translations, and the advanced API provider.
+
+**Migration:** after upgrading, sign in once through this connector and sync your notes. The v0.4.1 shared AIdea/Codex login is no longer read. Device authorization must be permitted in your ChatGPT account/workspace. This is a direct implementation of the Codex OAuth/backend protocol, not an officially supported public third-party ChatGPT API.
+
 ## v0.4.1 — Reuse AIdea/Codex OAuth login
 
 Fix the “Codex CLI was not found” setup failure by reusing the local Codex OAuth session already created by AIdea or Codex.

@@ -33,7 +33,7 @@ Keep references in Zotero and your thinking in Obsidian. The connector creates o
 
 **Zotero library → Markdown notes → Title dashboard**
 
-Open a note from Zotero, or follow its backlink to the original item. The core connector needs no API key, AI service, or Obsidian community plugin. Korean abstract translation is optional; the default translation path reuses a local Codex OAuth login created by AIdea or Codex, with an OpenAI-compatible endpoint retained as an advanced option.
+Open a note from Zotero, or follow its backlink to the original item. The core connector needs no API key, AI service, or Obsidian community plugin. Korean abstract translation is optional; sign in to ChatGPT directly from the connector, with an OpenAI-compatible endpoint retained as an advanced option. No AIdea, Codex CLI, Node.js, or other plugin is required for ChatGPT translation.
 
 Opening a paper or dashboard from Zotero uses a **new Obsidian tab**, keeping your current tab in place.
 
@@ -136,15 +136,20 @@ This is a basic Markdown editor, not the embedded Obsidian application. The prev
 
 Run **Tools → Zotero–Obsidian Connector: Configure…** and enable abstract translation. Choose one of two providers. The translation instruction keeps technical terms, methods, model and dataset names, acronyms, equations, code identifiers, organizations, and proper nouns in English.
 
-#### Reuse an AIdea/Codex OAuth login (default)
+#### Sign in to ChatGPT (default)
 
-1. Sign in to **ChatGPT (Codex OAuth)** from AIdea, or sign in with the official [Codex CLI](https://developers.openai.com/codex/cli).
-2. In the connector configuration, choose **1 = ChatGPT (reuse AIdea/Codex OAuth login)**.
-3. Leave the model override blank to use `gpt-5.6-luna`.
+1. Open **Tools → Zotero–Obsidian Connector: ChatGPT login…**, or choose **1 = ChatGPT** during configuration.
+2. Enter the one-time code shown in Zotero on the OpenAI page opened in your browser. If requested, enable device code authorization in **ChatGPT Settings → Security**. Your account or workspace must permit Codex device authorization; see [OpenAI authentication guidance](https://developers.openai.com/codex/auth/).
+3. Return to Zotero after approval. In **Configure…**, enable Korean abstract translation and leave the model override blank to use `gpt-5.6-luna`.
+4. Use **Sync literature notes to Obsidian** to translate uncached abstracts.
 
-The connector reads the access token from the local Codex `auth.json` only when checking the account or making a translation request. It sends the token and uncached abstract directly to `https://chatgpt.com/backend-api/codex/responses`; it never copies refresh or access tokens into Zotero preferences, Markdown notes, translation caches, status files, or logs. Usage counts against the signed-in ChatGPT/Codex account's limits.
+The connector manages its own login in Zotero's encrypted password storage. It does not read or modify other apps' authentication files. It refreshes expiring access tokens automatically and sends only the access token and uncached abstract to `https://chatgpt.com/backend-api/codex/responses`. OAuth tokens are never placed in ordinary plugin preferences, Markdown notes, translation caches, status files, or debug logs. Usage counts against the signed-in ChatGPT/Codex account's limits.
 
-This flow follows Codex's local authentication and backend protocol, but the backend is not a public third-party API and may change. The configuration dialog explains this before enabling it. If the session expires, sign in again from AIdea or Codex.
+Use **Tools → Zotero–Obsidian Connector: ChatGPT sign out** to remove this connector's saved login or switch accounts. Disabling the plugin cancels pending requests but retains the login. Local sign-out does not revoke the session on OpenAI's servers.
+
+**Upgrading from v0.4.0/v0.4.1:** sign in once from the connector, even if AIdea or Codex is already signed in. Existing note settings and cached translations are retained.
+
+This implements Codex's device OAuth/backend protocol directly. It is not an official public third-party ChatGPT API and may change. The login dialog explains this before authorization. If refresh fails or device authorization is disabled by your workspace, resolve the account setting and sign in again from the connector.
 
 #### OpenAI-compatible endpoint (advanced)
 

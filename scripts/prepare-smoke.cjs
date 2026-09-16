@@ -14,6 +14,7 @@ fs.writeFileSync(path.join(profile,'user.js'),Object.entries(prefs).map(([k,v])=
 const result=path.join(run,'result.json');
 let smoke=fs.readFileSync(path.join(root,'tests','zotero-smoke.js'),'utf8');
 for(const [key,value] of Object.entries({__PROFILE__:profile,__VAULT__:vault,__RESULT__:result})) smoke=smoke.replaceAll(key,JSON.stringify(value));
+smoke=smoke.replaceAll('__LIVE_OAUTH__',JSON.stringify(process.argv.includes('--live-oauth')));
 fs.writeFileSync(path.join(addon,'smoke.js'),smoke);
 fs.appendFileSync(path.join(addon,'bootstrap.js'),`\nvar originalStartup=startup; startup=async function(data){try{await originalStartup(data);Services.scriptloader.loadSubScript(data.rootURI+'smoke.js',this);}catch(error){await IOUtils.writeJSON(${JSON.stringify(result)},{ok:false,error:String(error),stack:error.stack});}};\n`);
 fs.writeFileSync(path.join(root,'work','smoke-current.json'),JSON.stringify({run,profile,result}));

@@ -1,5 +1,13 @@
 # Validation
 
+## v0.4.2 standalone ChatGPT OAuth (2026-09-16)
+
+- **43 automated tests** pass. New coverage exercises fresh-install login without any filesystem/CLI dependencies, device-code polling/backoff/timeout/cancellation, connector-only persistence, automatic token rotation, concurrent refresh, one bounded 401 retry, logout races, and rejecting partial responses without leaking tokens.
+- **36 isolated Zotero 9.0.6 / Windows checks** pass, exercising the actual password manager and encrypted file, native fetch adapter, login menu and code panel, browser destination, logout, and existing note/editor synchronization. OAuth responses are synthetic for repeatable full-flow testing; no AIdea plugin or shared auth file is used.
+- An opt-in live probe successfully obtained a device code directly from OpenAI inside Zotero, then cancelled before authorization. This verifies the real device-code endpoint and transport, **not** a newly approved account's token exchange, refresh, or model access. Those remaining live steps require the user's browser approval.
+- Run `node scripts/prepare-smoke.cjs` and `scripts/run-smoke.ps1` for offline OAuth fixtures. Add `--live-oauth` to preparation to opt in to device-code issuance/cancellation. No account credentials are needed by either test mode.
+- macOS/Linux and accounts with organization-specific authentication restrictions remain untested.
+
 ## v0.4.1 shared Codex OAuth session (2026-09-16)
 
 - **33 automated tests** pass across synchronization, shared-file editing, Zotero tabs, safe previews, API translation, and Codex OAuth translation.

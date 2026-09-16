@@ -10,7 +10,7 @@ function createBridge(deps) {
   const merge = deps.mergeNote || (typeof require !== 'undefined' ? require('./note-document.js').mergeNote : null);
   const noteTabs = deps.createNoteTabs ? deps.createNoteTabs({Z, timers}) : null;
   const codex = deps.codexTranslator || (deps.createCodexTranslator ? deps.createCodexTranslator({
-    Z, io, path, Services: deps.Services, executable: deps.codexExecutable
+    Z, Services: deps.Services, timers
   }) : null);
   let config = deps.config || null;
   let translationApiKey = deps.translationApiKey || '';
@@ -105,19 +105,16 @@ function createBridge(deps) {
     let translationProvider, translationEndpoint, translationModel, codexModel, key;
     if (enabled) {
       const defaults = translationDefaults(config || {});
-      const choice = window.prompt('Translation provider:\n\n1 = ChatGPT (reuse AIdea/Codex OAuth login; no API key)\n2 = OpenAI-compatible endpoint\n\nEnter 1 or 2:', defaults.provider === 'api' ? '2' : '1');
+      const choice = window.prompt('Translation provider:\n\n1 = ChatGPT (sign in here; no API key or other plugin required)\n2 = OpenAI-compatible endpoint\n\nEnter 1 or 2:', defaults.provider === 'api' ? '2' : '1');
       if (choice === null) return;
       translationProvider = choice.trim() === '2' ? 'api' : choice.trim() === '1' ? 'codex' : '';
       if (!translationProvider) throw new Error('Enter 1 for Codex OAuth or 2 for an API endpoint.');
       if (translationProvider === 'codex') {
         if (!codex) throw new Error('Codex translation support is unavailable. Reinstall the connector.');
         const state = await codex.status();
-        if (!state.installed) throw new Error('No Codex OAuth login was found. Sign in from AIdea settings, then configure again.');
         if (!state.signedIn) {
-          if (!window.confirm('Codex OAuth is not signed in. Start the Codex browser sign-in now?\n\nYou can also sign in from AIdea settings first.')) return;
-          await codex.login();
+          await loginWindow(window);
         }
-        if (!window.confirm('Use the local Codex OAuth session for abstract translation?\n\nThe connector reads the local Codex auth file only when needed and sends its access token and the uncached abstract directly to chatgpt.com. The token is never copied to plugin settings, notes, caches, or logs. This backend integration is not an official third-party API and may change.')) return;
         codexModel = window.prompt('Optional Codex model override. Leave blank to use gpt-5.6-luna:', defaults.codexModel);
         if (codexModel === null) return;
       } else {
@@ -138,6 +135,63 @@ function createBridge(deps) {
     window.alert('Connector configured. Open your notes folder/dashboard.md in Obsidian.');
   }
   const windows = new Map();
+  const loginPanels = new Map();
+  async function loginWindow(window) {
+    if (!codex) throw new Error('ChatGPT translation support is unavailable. Reinstall the connector.');
+    if (loginPanels.size) throw new Error('ChatGPT sign-in is already open. Finish or cancel that sign-in first.');
+    // Explain the destination and credential storage before starting this opt-in login.
+    if (!window.confirm('Sign in to ChatGPT for Korean abstract translation?\n\nYour browser will open an OpenAI page. Enter the one-time code displayed here. The connector stores its own login in Zotero password storage and refreshes it automatically. Only uncached abstracts are sent to ChatGPT. No other plugin or CLI is needed.\n\nThis uses the Codex OAuth/backend protocol, which is not a public third-party API and may change.')) {
+      throw new Error('ChatGPT sign-in cancelled.');
+    }
+    const doc = window.document;
+    const el = (tag, text) => {
+      const node = doc.createElementNS('http://www.w3.org/1999/xhtml', tag);
+      if (text !== undefined) node.textContent = text;
+      return node;
+    };
+    const panel = el('div');
+    panel.id = 'zoc-chatgpt-login-panel';
+    panel.setAttribute('role', 'dialog'); panel.setAttribute('aria-modal', 'true');
+    panel.setAttribute('aria-label', 'ChatGPT login');
+    panel.style.cssText = 'position:fixed;inset:0;z-index:2147483647;background:#0008;display:flex;align-items:center;justify-content:center;font:15px system-ui;color:#222;';
+    const card = el('div');
+    card.style.cssText = 'background:#fff;border-radius:12px;padding:28px;max-width:480px;box-shadow:0 6px 30px #0005;';
+    card.appendChild(el('h2', 'ChatGPT login'));
+    const message = el('p', 'Requesting a one-time code…');
+    message.setAttribute('role', 'status'); card.appendChild(message);
+    const codeBox = el('input'); codeBox.readOnly = true; codeBox.hidden = true;
+    codeBox.setAttribute('aria-label', 'One-time login code');
+    codeBox.style.cssText = 'font:24px monospace;width:100%;box-sizing:border-box;padding:10px;margin:12px 0;';
+    codeBox.addEventListener('focus', () => codeBox.select()); card.appendChild(codeBox);
+    const browserButton = el('button', 'Open OpenAI login page'); browserButton.hidden = true;
+    browserButton.style.marginRight = '12px';
+    card.appendChild(browserButton);
+    const cancel = el('button', 'Cancel'); card.appendChild(cancel);
+    const previousFocus = doc.activeElement;
+    const cancelAction = () => { codex.cancelLogin(); panel.remove(); };
+    cancel.addEventListener('click', cancelAction);
+    panel.addEventListener('keydown', event => {
+      if (event.key === 'Escape') { event.preventDefault(); cancelAction(); }
+      if (event.key === 'Tab') {
+        const targets = [codeBox, browserButton, cancel].filter(node => !node.hidden);
+        const index = targets.indexOf(doc.activeElement);
+        event.preventDefault(); targets[(index + (event.shiftKey ? targets.length - 1 : 1)) % targets.length].focus();
+      }
+    });
+    panel.appendChild(card); doc.documentElement.appendChild(panel);
+    loginPanels.set(window, panel); cancel.focus();
+    try {
+      return await codex.login({onCode: ({userCode, verificationURL}) => {
+        codeBox.value = userCode; codeBox.hidden = false; browserButton.hidden = false;
+        message.textContent = 'Copy this code and enter it on the OpenAI page. If asked, enable device code authorization in ChatGPT Settings → Security. Waiting for approval (up to 15 minutes)…';
+        browserButton.addEventListener('click', () => Z.launchURL(verificationURL));
+        Z.launchURL(verificationURL); codeBox.focus(); codeBox.select();
+      }});
+    } finally {
+      panel.remove(); loginPanels.delete(window);
+      if (previousFocus?.isConnected) previousFocus.focus();
+    }
+  }
   let stopped = false, observer, timer, chain = Promise.resolve();
   let lastResult = null;
   const libraries = () => Z.Libraries.getAll().filter(l => ['user', 'group'].includes(l.libraryType));
@@ -445,16 +499,20 @@ function createBridge(deps) {
       parent.appendChild(node); nodes.push(node);
     }
     menu('menu_ToolsPopup', 'zoc-configure', 'Zotero–Obsidian Connector: Configure…', () => configureWindow(window));
-    menu('menu_ToolsPopup', 'zoc-codex-login', 'Zotero–Obsidian Connector: Check ChatGPT OAuth…', async () => {
+    menu('menu_ToolsPopup', 'zoc-codex-login', 'Zotero–Obsidian Connector: ChatGPT login…', async () => {
       if (!codex) throw new Error('Codex translation support is unavailable. Reinstall the connector.');
       const state = await codex.status();
-      if (!state.installed) throw new Error('No Codex OAuth login was found. Sign in from AIdea settings, or install Codex CLI and try again.');
       if (state.signedIn) {
-        window.alert('The local Codex OAuth session is signed in to ChatGPT and ready for translation.');
+        window.alert('The connector is signed in to ChatGPT. To switch accounts, use ChatGPT sign out, then sign in again.');
         return;
       }
-      await codex.login();
-      window.alert('The local Codex OAuth session is now signed in and ready for translation.');
+      await loginWindow(window);
+      window.alert('ChatGPT sign-in complete. If translation is already enabled, use Sync literature notes to Obsidian. Otherwise enable Korean translation in Configure.');
+    });
+    menu('menu_ToolsPopup', 'zoc-codex-logout', 'Zotero–Obsidian Connector: ChatGPT sign out', async () => {
+      if (!codex) throw new Error('ChatGPT support is unavailable.');
+      await codex.logout();
+      window.alert('The connector ChatGPT login has been removed.');
     });
     menu('menu_ToolsPopup', 'zoc-dashboard', 'Open literature dashboard in Obsidian', async () => {
       await syncAll();
@@ -477,6 +535,9 @@ function createBridge(deps) {
     windows.set(window, nodes);
   }
   function removeWindow(window) {
+    if (loginPanels.has(window)) {
+      codex?.cancelLogin(); loginPanels.get(window).remove(); loginPanels.delete(window);
+    }
     noteTabs?.removeWindow(window);
     for (const node of windows.get(window) || []) node.remove();
     windows.delete(window);
@@ -505,6 +566,7 @@ function createBridge(deps) {
   }
   async function stop() {
     stopped = true;
+    codex?.stop?.();
     if (observer !== undefined) Z.Notifier.unregisterObserver(observer);
     if (timer) timers.clearTimeout(timer);
     Z.Reader?.unregisterEventListener('createViewContextMenu', readerMenu);
