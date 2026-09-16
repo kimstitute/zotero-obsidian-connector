@@ -1,0 +1,27 @@
+#zoc-settings { --zoc-accent:#7152b8; --zoc-border:color-mix(in srgb, currentColor 18%, transparent); max-width:720px; line-height:1.5; color-scheme:light dark; }
+#zoc-settings * { box-sizing:border-box; }
+#zoc-settings [hidden] { display:none !important; }
+#zoc-settings .zoc-card { padding:20px; margin:16px 0; border:1px solid var(--zoc-border); border-radius:12px; }
+#zoc-settings h2 { font-size:16px; margin:0 0 16px; }
+#zoc-settings label:not(.zoc-toggle) { display:block; margin:14px 0 6px; font-weight:600; }
+#zoc-settings input:not([type=checkbox]), #zoc-settings select { display:block; width:100%; min-width:0; padding:9px 10px; border:1px solid var(--zoc-border); border-radius:6px; background:Field; color:FieldText; font:inherit; margin:0; }
+#zoc-settings button { padding:8px 14px; border:1px solid var(--zoc-border); border-radius:6px; font:inherit; cursor:pointer; margin:0; white-space:nowrap; }
+#zoc-settings button:disabled { opacity:.55; cursor:default; }
+#zoc-settings .zoc-primary { background:var(--zoc-accent); color:white; border-color:var(--zoc-accent); }
+#zoc-settings :is(input,select,button):focus-visible { outline:2px solid var(--zoc-accent); outline-offset:2px; }
+#zoc-settings .zoc-row { display:flex; align-items:center; gap:10px; }
+#zoc-settings .zoc-row input { flex:1; }
+#zoc-settings .zoc-actions { flex-wrap:wrap; }
+#zoc-settings .zoc-muted { opacity:.75; font-size:12px; margin:8px 0; overflow-wrap:anywhere; }
+#zoc-settings .zoc-toggle { display:flex; align-items:center; gap:9px; font-weight:600; }
+#zoc-settings input[type=checkbox] { accent-color:var(--zoc-accent); width:17px; height:17px; flex:none; }
+#zoc-settings .zoc-provider-box { border-top:1px solid var(--zoc-border); margin-top:18px; padding-top:18px; }
+#zoc-settings .zoc-badge { font-size:12px; border-radius:20px; padding:3px 10px; background:color-mix(in srgb, currentColor 9%, transparent); }
+#zoc-settings .zoc-badge[data-connected=true] { color:light-dark(#166534,#86efac); background:light-dark(#dcfce7,#163c28); }
+#zoc-settings .zoc-device { padding:14px; margin:14px 0; border:1px solid var(--zoc-accent); border-radius:8px; }
+#zoc-settings #zoc-device-code { font:22px monospace; text-align:center; letter-spacing:2px; margin:10px 0; }
+#zoc-settings .zoc-disclosure { margin-top:16px; }
+#zoc-settings .zoc-footer { padding:4px 0 20px; }
+#zoc-settings #zoc-feedback { overflow-wrap:anywhere; white-space:pre-wrap; }
+#zoc-settings #zoc-feedback[data-error=true] { color:light-dark(#b91c1c,#fca5a5); }
+@media (max-width:600px) { #zoc-settings .zoc-card { padding:14px; } #zoc-settings .zoc-row:not(.zoc-account-row) { flex-wrap:wrap; } #zoc-settings #zoc-vault { flex-basis:100%; } }

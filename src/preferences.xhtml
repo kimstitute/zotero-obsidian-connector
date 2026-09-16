@@ -1,0 +1,74 @@
+<vbox xmlns="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul" xmlns:html="http://www.w3.org/1999/xhtml" onload="Zotero_Preferences.getScope('zoc-preferences').ZOCSettings.load(this.querySelector('#zoc-settings'), event)">
+<html:div id="zoc-settings" class="main-section">
+  <html:p class="zoc-muted" data-label="intro">Connect your library, manage translation, and sync your notes.</html:p>
+  <html:section class="zoc-card">
+    <html:h2 data-label="library">Obsidian connection</html:h2>
+    <html:label for="zoc-vault" data-label="vault">Vault folder</html:label>
+    <html:div class="zoc-row">
+      <html:input id="zoc-vault" type="text" autocomplete="off" spellcheck="false" />
+      <html:button id="zoc-browse" type="button" data-label="browse">Choose folder…</html:button>
+    </html:div>
+    <html:p class="zoc-muted" data-label="vaultHelp">Select the folder containing .obsidian.</html:p>
+    <html:label for="zoc-folder" data-label="folder">Notes folder inside the vault</html:label>
+    <html:input id="zoc-folder" type="text" placeholder="Papers" spellcheck="false" />
+    <html:p class="zoc-muted" data-label="scope">All papers in your Zotero personal and group libraries are included.</html:p>
+  </html:section>
+  <html:section class="zoc-card">
+    <html:label class="zoc-toggle" for="zoc-translate">
+      <html:input id="zoc-translate" type="checkbox" />
+      <html:span data-label="translate">Translate abstracts into Korean</html:span>
+    </html:label>
+    <html:p class="zoc-muted" data-label="terms">Keep technical terms, model names, and proper nouns in English.</html:p>
+    <html:div id="zoc-translation-options">
+      <html:label for="zoc-provider" data-label="provider">Translation provider</html:label>
+      <html:select id="zoc-provider">
+        <html:option value="codex" data-label="chatgpt">ChatGPT login</html:option>
+        <html:option value="api" data-label="api">OpenAI-compatible API (advanced)</html:option>
+      </html:select>
+      <html:div id="zoc-chatgpt" class="zoc-provider-box">
+        <html:div class="zoc-row zoc-account-row">
+          <html:strong>ChatGPT</html:strong>
+          <html:span id="zoc-account-status" class="zoc-badge" role="status" />
+        </html:div>
+        <html:p class="zoc-muted" data-label="independent">No API key, AIdea, or Codex CLI needed.</html:p>
+        <html:div class="zoc-row zoc-actions">
+          <html:button id="zoc-login" type="button" data-label="login">Sign in with ChatGPT</html:button>
+          <html:button id="zoc-logout" type="button" data-label="logout">Sign out</html:button>
+          <html:button id="zoc-account-refresh" type="button" data-label="refresh">Refresh status</html:button>
+        </html:div>
+        <html:div id="zoc-device" hidden="hidden" class="zoc-device">
+          <html:p data-label="codeHelp">Enter this code on the OpenAI page. Enable device code login in ChatGPT Security settings if prompted.</html:p>
+          <html:input id="zoc-device-code" type="text" readonly="readonly" aria-label="One-time login code" />
+          <html:div class="zoc-row zoc-actions">
+            <html:button id="zoc-device-open" type="button" data-label="openLogin">Open login page</html:button>
+            <html:button id="zoc-device-cancel" type="button" data-label="cancel">Cancel login</html:button>
+          </html:div>
+        </html:div>
+        <html:label for="zoc-codex-model" data-label="modelOverride">Model override (optional)</html:label>
+        <html:input id="zoc-codex-model" type="text" placeholder="gpt-5.6-luna" spellcheck="false" />
+        <html:p class="zoc-muted" data-label="modelHelp">Leave blank to use the default model.</html:p>
+        <html:p class="zoc-muted zoc-disclosure" data-label="disclosure">Signing in stores this connector's login in Zotero password storage. Uncached abstracts go to ChatGPT and use your account's allowance. This Codex integration is not an official third-party API and may change.</html:p>
+      </html:div>
+      <html:div id="zoc-api" class="zoc-provider-box" hidden="hidden">
+        <html:label for="zoc-endpoint" data-label="endpoint">Chat completions URL</html:label>
+        <html:input id="zoc-endpoint" type="url" spellcheck="false" />
+        <html:label for="zoc-api-model" data-label="model">Model</html:label>
+        <html:input id="zoc-api-model" type="text" spellcheck="false" />
+        <html:label for="zoc-api-key" data-label="key">API key (optional)</html:label>
+        <html:input id="zoc-api-key" type="password" autocomplete="new-password" />
+        <html:p id="zoc-key-hint" class="zoc-muted" />
+        <html:label class="zoc-toggle" for="zoc-clear-key"><html:input id="zoc-clear-key" type="checkbox" /><html:span data-label="clearKey">Remove saved API key on save</html:span></html:label>
+        <html:p class="zoc-muted" data-label="apiHelp">Use HTTPS for remote services. Local Ollama may use HTTP without an API key. API keys are stored in local Zotero preferences.</html:p>
+      </html:div>
+    </html:div>
+  </html:section>
+  <html:div class="zoc-footer">
+    <html:div class="zoc-row zoc-actions">
+      <html:button id="zoc-save-sync" type="button" class="zoc-primary" data-label="saveSync">Save and sync now</html:button>
+      <html:button id="zoc-save" type="button" data-label="save">Save settings</html:button>
+    </html:div>
+    <html:p id="zoc-feedback" role="status" aria-live="polite" />
+    <html:p id="zoc-last-sync" class="zoc-muted" />
+  </html:div>
+</html:div>
+</vbox>

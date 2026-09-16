@@ -1,5 +1,11 @@
 # Validation
 
+## v0.5.0 graphical settings (2026-09-16)
+
+- **44 automated tests** pass, including validating and saving configuration without running a sync, preserving API keys, and excluding secrets from the GUI settings snapshot.
+- **47 native Zotero 9.0.6 / Windows integration checks** pass, covering settings-pane registration/loading, usable field layout, translation/provider switching, masked key entry, save without file generation, inline errors, explicit sync, and inline ChatGPT login/logout with synthetic server responses. Existing synchronization/editor checks remain included.
+- Device authorization and account-access limitations documented for v0.4.2 still apply. The folder picker uses Zotero's native FilePicker; no user vault or account is touched by the isolated tests. macOS/Linux remain untested.
+
 ## v0.4.2 standalone ChatGPT OAuth (2026-09-16)
 
 - **43 automated tests** pass. New coverage exercises fresh-install login without any filesystem/CLI dependencies, device-code polling/backoff/timeout/cancellation, connector-only persistence, automatic token rotation, concurrent refresh, one bounded 401 retry, logout races, and rejecting partial responses without leaking tokens.

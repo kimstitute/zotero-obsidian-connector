@@ -74,14 +74,14 @@ Select the downloaded XPI. GitHub's “Source code” ZIP is for development, no
 
 ### 2. Choose your vault
 
-Open **Tools → Zotero–Obsidian Connector: Configure…** and enter:
+Open **Zotero Settings → Obsidian Connector**, or **Tools → Zotero–Obsidian Connector: Settings…**. The native settings page loads your existing configuration and follows Zotero's Korean or English interface language.
 
 | Setting | What to enter |
 | :--- | :--- |
-| **Vault path** | The full path to your existing vault—the folder containing `.obsidian`. |
+| **Vault path** | Use **Choose folder…** to select the existing vault containing `.obsidian`, or type its full path. |
 | **Notes folder** | A folder inside that vault, such as `Papers` or `Research/Papers`. |
 
-Settings remain in your local Zotero preferences. No files are generated before configuration.
+Click **Save settings** to save without starting a sync. Click **Save and sync now** to save and generate/update notes immediately. Settings remain in local Zotero preferences. Validation errors and sync results appear directly on the page. Once configured, later Zotero item changes continue to sync automatically.
 
 ### 3. Open your dashboard
 
@@ -111,7 +111,7 @@ Your vault/
 | **Edit inside Zotero** | Right-click a paper → **Open Obsidian note in Zotero tab**. Also available in the PDF reader. |
 | **Return to Zotero** | Click **Open in Zotero** in the Markdown note. |
 | **Refresh everything** | Zotero **Tools → Sync literature notes to Obsidian**. |
-| **Change the destination** | Run **Tools → Zotero–Obsidian Connector: Configure…** again. |
+| **Change the destination** | Open **Settings → Obsidian Connector** and choose the vault and notes folder. |
 
 Keep Zotero running for automatic updates. In Obsidian editing mode, use **Ctrl+click** (**Cmd+click** on macOS) for links, or switch to reading mode. Allow the application link if your system prompts you.
 
@@ -134,14 +134,14 @@ Choose **Open Obsidian note in Zotero tab** from a paper or its PDF reader. The 
 This is a basic Markdown editor, not the embedded Obsidian application. The preview supports headings, bullets, bold text, code, and HTTP/Zotero links. Wikilink navigation, math, tables, embedded media, and Obsidian plugins require Obsidian. Raw HTML is displayed as text; previews do not load remote images or execute note code. Saves retain the previous revision as `.bridge-bak`; keep normal vault backups because cross-application writes cannot be fully locked.
 ### Optional Korean abstract translation
 
-Run **Tools → Zotero–Obsidian Connector: Configure…** and enable abstract translation. Choose one of two providers. The translation instruction keeps technical terms, methods, model and dataset names, acronyms, equations, code identifiers, organizations, and proper nouns in English.
+Open **Settings → Obsidian Connector** and turn on **Translate abstracts into Korean**. Select a provider from the dropdown. The translation instruction keeps technical terms, methods, model and dataset names, acronyms, equations, code identifiers, organizations, and proper nouns in English.
 
 #### Sign in to ChatGPT (default)
 
-1. Open **Tools → Zotero–Obsidian Connector: ChatGPT login…**, or choose **1 = ChatGPT** during configuration.
+1. Select **ChatGPT login** in the settings page and click **Sign in with ChatGPT**. The account badge shows your local login status.
 2. Enter the one-time code shown in Zotero on the OpenAI page opened in your browser. If requested, enable device code authorization in **ChatGPT Settings → Security**. Your account or workspace must permit Codex device authorization; see [OpenAI authentication guidance](https://developers.openai.com/codex/auth/).
-3. Return to Zotero after approval. In **Configure…**, enable Korean abstract translation and leave the model override blank to use `gpt-5.6-luna`.
-4. Use **Sync literature notes to Obsidian** to translate uncached abstracts.
+3. Return to Zotero after approval. The badge changes to **Signed in**. Leave the model override blank to use `gpt-5.6-luna`.
+4. Click **Save and sync now** to translate uncached abstracts. The same page has **Sign out**, **Refresh status**, and **Cancel login** controls.
 
 The connector manages its own login in Zotero's encrypted password storage. It does not read or modify other apps' authentication files. It refreshes expiring access tokens automatically and sends only the access token and uncached abstract to `https://chatgpt.com/backend-api/codex/responses`. OAuth tokens are never placed in ordinary plugin preferences, Markdown notes, translation caches, status files, or debug logs. Usage counts against the signed-in ChatGPT/Codex account's limits.
 
@@ -153,7 +153,7 @@ This implements Codex's device OAuth/backend protocol directly. It is not an off
 
 #### OpenAI-compatible endpoint (advanced)
 
-Choose **2 = OpenAI-compatible endpoint**, then enter a `chat/completions` URL and model. This keeps the v0.3.0 workflow available for Ollama and compatible cloud services.
+Choose **OpenAI-compatible API (advanced)**, then enter a `chat/completions` URL and model. The API key field is masked: leave it empty to retain a saved key, or select **Remove saved API key on save** to clear it. This keeps the v0.3.0 workflow available for Ollama and compatible cloud services.
 
 For a fully local setup with [Ollama](https://ollama.com/):
 

@@ -82,7 +82,8 @@ function createBridge(deps) {
       codexModel: translation.codexModel
     }, directory: path.join(vaultPath, ...segments)};
   }
-  async function configure(value) {
+  async function configure(value, {sync = true} = {}) {
+    if (stopped) throw new Error('The connector is disabled. Restart it before saving settings.');
     const validated = await validateConfig(value);
     await enqueue(async () => {
       Z.Prefs.set(prefKey, JSON.stringify(validated.config), true);
@@ -94,45 +95,24 @@ function createBridge(deps) {
       directory = validated.directory;
       translationCache = {};
     });
-    return syncAll();
+    return sync ? syncAll() : {saved: true};
   }
-  async function configureWindow(window) {
-    const vaultPath = window.prompt('Obsidian vault: enter the full folder path (the folder containing .obsidian).', config?.vaultPath || '');
-    if (vaultPath === null) return;
-    const noteFolder = window.prompt('Notes folder inside the vault:', config?.noteFolder || 'Papers');
-    if (noteFolder === null) return;
-    const enabled = window.confirm('Translate Zotero abstracts into Korean when creating Obsidian notes?\n\nTechnical terms, model and dataset names, acronyms, and proper nouns will stay in English.');
-    let translationProvider, translationEndpoint, translationModel, codexModel, key;
-    if (enabled) {
-      const defaults = translationDefaults(config || {});
-      const choice = window.prompt('Translation provider:\n\n1 = ChatGPT (sign in here; no API key or other plugin required)\n2 = OpenAI-compatible endpoint\n\nEnter 1 or 2:', defaults.provider === 'api' ? '2' : '1');
-      if (choice === null) return;
-      translationProvider = choice.trim() === '2' ? 'api' : choice.trim() === '1' ? 'codex' : '';
-      if (!translationProvider) throw new Error('Enter 1 for Codex OAuth or 2 for an API endpoint.');
-      if (translationProvider === 'codex') {
-        if (!codex) throw new Error('Codex translation support is unavailable. Reinstall the connector.');
-        const state = await codex.status();
-        if (!state.signedIn) {
-          await loginWindow(window);
-        }
-        codexModel = window.prompt('Optional Codex model override. Leave blank to use gpt-5.6-luna:', defaults.codexModel);
-        if (codexModel === null) return;
-      } else {
-        translationEndpoint = window.prompt('OpenAI-compatible chat completions URL:', defaults.endpoint);
-        if (translationEndpoint === null) return;
-        translationModel = window.prompt('Translation model:', defaults.model);
-        if (translationModel === null) return;
-        key = window.prompt('Optional Bearer API key. Leave blank for local Ollama. It is stored only in local Zotero preferences:', '');
-        if (key === null) return;
-      }
-    }
-    await configure({
-      vaultPath: vaultPath.trim(), noteFolder: noteFolder.trim(),
-      translateAbstracts: enabled,
-      translationProvider, translationEndpoint, translationModel, codexModel,
-      ...(enabled && translationProvider === 'api' ? {translationApiKey: key} : {})
-    });
-    window.alert('Connector configured. Open your notes folder/dashboard.md in Obsidian.');
+  function getSettings() {
+    const value = translationDefaults(config || {});
+    return {vaultPath: config?.vaultPath || '', noteFolder: config?.noteFolder || 'Papers',
+      translateAbstracts: value.enabled, translationProvider: value.provider,
+      translationEndpoint: value.endpoint, translationModel: value.model,
+      codexModel: value.codexModel, hasApiKey: !!translationApiKey};
+  }
+  const getAccountStatus = () => codex ? codex.status() : Promise.resolve({signedIn:false});
+  function loginChatGPT(options) {
+    if (!codex) throw new Error('ChatGPT support is unavailable. Reinstall the connector.');
+    return codex.login(options);
+  }
+  const logoutChatGPT = () => codex?.logout();
+  const cancelChatGPTLogin = () => codex?.cancelLogin();
+  async function configureWindow() {
+    return Z.Utilities.Internal.openPreferences('zoc-preferences');
   }
   const windows = new Map();
   const loginPanels = new Map();
@@ -498,7 +478,7 @@ function createBridge(deps) {
       node.addEventListener('command', () => handler().catch(e => report(window, e)));
       parent.appendChild(node); nodes.push(node);
     }
-    menu('menu_ToolsPopup', 'zoc-configure', 'Zotero–Obsidian Connector: Configure…', () => configureWindow(window));
+    menu('menu_ToolsPopup', 'zoc-configure', 'Zotero–Obsidian Connector: Settings…', () => configureWindow(window));
     menu('menu_ToolsPopup', 'zoc-codex-login', 'Zotero–Obsidian Connector: ChatGPT login…', async () => {
       if (!codex) throw new Error('Codex translation support is unavailable. Reinstall the connector.');
       const state = await codex.status();
@@ -507,7 +487,7 @@ function createBridge(deps) {
         return;
       }
       await loginWindow(window);
-      window.alert('ChatGPT sign-in complete. If translation is already enabled, use Sync literature notes to Obsidian. Otherwise enable Korean translation in Configure.');
+      window.alert('ChatGPT sign-in complete. Open connector Settings to enable Korean translation and save and sync.');
     });
     menu('menu_ToolsPopup', 'zoc-codex-logout', 'Zotero–Obsidian Connector: ChatGPT sign out', async () => {
       if (!codex) throw new Error('ChatGPT support is unavailable.');
@@ -576,6 +556,7 @@ function createBridge(deps) {
   }
   const readerMenu = ({reader, append}) => append({label: 'Open Obsidian note in Zotero tab',
     onCommand: () => Z.Items.getAsync(reader.itemID).then(item => openItemInTab(item)).catch(e => report(Z.getMainWindow(), e))});
-  return {start, stop, syncAll, configure, openItem, openItemInTab, createNoteSession, addWindow, removeWindow, render, identity, get configured() { return !!directory; }, get lastResult() { return lastResult; }};
+  return {start, stop, syncAll, configure, getSettings, getAccountStatus, loginChatGPT, logoutChatGPT, cancelChatGPTLogin,
+    openItem, openItemInTab, createNoteSession, addWindow, removeWindow, render, identity, get configured() { return !!directory; }, get lastResult() { return lastResult; }};
 }
 if (typeof module !== 'undefined') module.exports = {createBridge};

@@ -1,3 +1,16 @@
+## v0.5.0 — Native graphical settings
+
+Configure the connector from **Zotero Settings → Obsidian Connector**, also available through **Tools → Zotero–Obsidian Connector: Settings…**. Repeated setup prompts are replaced by one settings page.
+
+- Choose a vault with a folder picker, edit the notes folder, and toggle Korean abstract translation.
+- Select ChatGPT or an advanced compatible API; show only the relevant fields.
+- Manage standalone ChatGPT login, device code approval, cancellation, status, and sign-out in the page.
+- Mask API key entry and preserve existing keys unless explicitly replaced or cleared.
+- Separate **Save settings** from **Save and sync now**, with inline validation and sync results.
+- Load existing settings and follow Zotero's Korean/English language and light/dark theme.
+
+The v0.4.2 authentication remains independent of AIdea and Codex CLI. Existing settings and saved connector login are retained.
+
 ## v0.4.2 — Independent ChatGPT login
 
 ChatGPT translation now works without AIdea, Codex CLI, Node.js, or shared authentication files.

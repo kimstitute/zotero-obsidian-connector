@@ -22,6 +22,17 @@ function fixture(options = {}) {
   return {bridge:createBridge({Z,io,path:{join:path.join,filename:path.basename,isAbsolute:path.isAbsolute,normalize:path.normalize,tempDir:'C:/Temp'},timers,config,translate:options.translate,codexTranslator:options.codexTranslator,translationApiKey:options.translationApiKey}),items,files,launched,errors,make,io,Z,prefs,notify:(...a)=>notify(...a),flush:async()=>{const f=pending;pending=null;if(f)f();await Promise.resolve();}};
 }
 const dir='C:\\TestVault\\Papers';
+test('GUI settings save validates without syncing and never exposes the saved API key',async()=>{
+ const f=fixture({unconfigured:true,translationApiKey:'private-test-key'});await f.bridge.start();
+ const settings=f.bridge.getSettings();assert.equal(settings.hasApiKey,true);assert.ok(!JSON.stringify(settings).includes('private-test-key'));
+ settings.noteFolder='Uncommitted';assert.equal(f.bridge.getSettings().noteFolder,'Papers');
+ await f.bridge.configure({vaultPath:'C:/TestVault',noteFolder:'GuiNotes',translateAbstracts:false},{sync:false});
+ assert.equal(f.files.size,0);assert.equal(f.bridge.getSettings().noteFolder,'GuiNotes');assert.equal(f.bridge.getSettings().hasApiKey,true);
+ await assert.rejects(f.bridge.configure({vaultPath:'C:/TestVault',noteFolder:'../bad'},{sync:false}));
+ assert.equal(f.bridge.getSettings().noteFolder,'GuiNotes');
+ await f.bridge.configure({...f.bridge.getSettings(),translationApiKey:''},{sync:false});assert.equal(f.bridge.getSettings().hasApiKey,false);
+ await f.bridge.syncAll();assert.ok(f.files.has(path.join('C:/TestVault','GuiNotes','dashboard.md')));
+});
 test('full library coverage, group keys separated, excluded feeds and repeat idempotence',async()=>{
  const f=fixture();await f.bridge.start();assert.equal(f.bridge.lastResult.created,2);assert.equal((await f.bridge.syncAll()).unchanged,2);
  assert.equal([...f.files.keys()].filter(p=>p.endsWith('.md')&&!p.endsWith('dashboard.md')).length,2);

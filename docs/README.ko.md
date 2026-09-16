@@ -27,19 +27,21 @@ Zotero 논문을 Obsidian Markdown 노트로 자동 생성하고 양쪽 앱을 �
 ### 설치 및 설정
 
 1. [릴리스 페이지](https://github.com/kimstitute/zotero-obsidian-connector/releases/latest)에서 `.xpi` 파일을 받습니다. Zotero 9.0.x의 **도구 → 플러그인 → 톱니바퀴 → 파일에서 플러그인 설치**에서 XPI를 선택합니다. 소스 코드 ZIP은 설치 파일이 아닙니다.
-2. **도구 → Zotero–Obsidian Connector: Configure…**를 엽니다.
-3. `.obsidian` 폴더가 들어 있는 보관함의 전체 경로를 입력합니다.
+2. **Zotero 설정 → Obsidian Connector**를 엽니다. **도구 → Zotero–Obsidian Connector: Settings…**에서도 같은 화면으로 이동합니다.
+3. **폴더 선택…** 버튼으로 `.obsidian` 폴더가 들어 있는 보관함을 선택합니다. 경로를 직접 입력해도 됩니다.
 4. 보관함 안의 노트 폴더를 입력합니다. 예: `Papers`, `Research/Papers`.
-5. 노트 폴더의 `dashboard.md`에서 논문 제목을 누르면 해당 노트가 열립니다.
+5. **저장 후 지금 동기화**를 누릅니다. 노트 폴더의 `dashboard.md`에서 논문 제목을 누르면 해당 노트가 열립니다.
+
+**설정 저장**은 옵션만 저장하고 즉시 동기화하지 않습니다. **저장 후 지금 동기화**는 노트 생성·갱신까지 실행합니다. 이후 Zotero 항목 변경에 따른 자동 동기화는 계속 작동합니다. 기존 설정은 자동으로 불러오며 오류와 작업 결과는 설정 화면 안에 표시합니다. 한국어·영어 표시는 Zotero 언어를 따릅니다.
 
 설정 과정에서 **초록 한국어 번역**을 켤 수 있습니다. 번역 시 전문용어, 방법·모델·데이터셋 이름, 약어, 수식, 코드 식별자와 고유명사는 영어로 유지합니다.
 
 기본 방식은 **커넥터 자체의 ChatGPT 로그인**입니다. AIdea, Codex CLI, Node.js나 다른 플러그인을 설치할 필요가 없습니다.
 
-1. **도구 → Zotero–Obsidian Connector: ChatGPT login…**을 누르거나 커넥터 설정에서 `1 = ChatGPT`를 선택합니다.
+1. 설정 화면에서 **초록을 한국어로 번역**을 켜고 제공자로 **ChatGPT 로그인**을 선택한 뒤 **ChatGPT 로그인** 버튼을 누릅니다.
 2. Zotero에 표시된 일회용 코드를 브라우저의 OpenAI 페이지에 입력합니다. 안내가 나오면 **ChatGPT 설정 → 보안**에서 기기 코드 인증을 활성화합니다. 계정 또는 워크스페이스가 Codex 기기 인증을 허용해야 합니다. [OpenAI 인증 안내](https://developers.openai.com/codex/auth/)
-3. 승인 후 Zotero로 돌아와 **Configure…**에서 한국어 번역을 켭니다. 모델 입력은 비워 두면 `gpt-5.6-luna`를 사용합니다.
-4. **Sync literature notes to Obsidian**을 실행하면 캐시에 없는 초록을 번역합니다.
+3. 승인 후 설정 화면의 계정 상태가 **로그인됨**으로 바뀝니다. 모델 입력은 비워 두면 `gpt-5.6-luna`를 사용합니다.
+4. **저장 후 지금 동기화**를 누르면 캐시에 없는 초록을 번역합니다. 로그인 취소·로그아웃·상태 새로고침도 같은 화면에서 할 수 있습니다.
 
 커넥터는 자체 로그인 정보를 Zotero의 암호화된 비밀번호 저장소에 보관하고 만료된 access token을 자동으로 갱신합니다. 다른 앱의 인증 파일은 읽거나 수정하지 않습니다. access token과 캐시에 없는 초록만 `https://chatgpt.com/backend-api/codex/responses`로 직접 전송합니다. OAuth 토큰은 일반 환경설정, Markdown, 번역 캐시, 상태 파일이나 디버그 로그에 기록하지 않습니다. 번역 사용량은 로그인한 ChatGPT/Codex 계정의 사용 한도에 포함됩니다.
 
@@ -49,7 +51,7 @@ Zotero 논문을 Obsidian Markdown 노트로 자동 생성하고 양쪽 앱을 �
 
 이 방식은 Codex 기기 OAuth와 백엔드 프로토콜을 직접 구현하며 공개된 공식 제3자 ChatGPT API는 아니므로 향후 변경될 수 있습니다. 로그인 전에 이를 안내합니다. 갱신에 실패하거나 워크스페이스에서 기기 인증을 차단한 경우 계정 설정을 확인하고 커넥터에서 다시 로그인하세요.
 
-`2 = OpenAI-compatible endpoint`를 선택하면 기존 API 방식도 사용할 수 있습니다. 아래 Ollama 설정이나 HTTPS 기반 호환 서비스를 사용하는 고급 옵션입니다.
+**OpenAI 호환 API (고급)**를 선택하면 기존 API 방식도 사용할 수 있습니다. API 키는 마스킹하여 입력하며, 비워 두면 저장된 키를 유지합니다. **저장할 때 기존 API 키 삭제**를 선택하면 키를 지울 수 있습니다. 아래 Ollama 설정이나 HTTPS 기반 호환 서비스를 사용하는 고급 옵션입니다.
 
 로컬에서만 번역하려면 [Ollama](https://ollama.com/)를 설치한 뒤 다음 모델을 준비할 수 있습니다.
 

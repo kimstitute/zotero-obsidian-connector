@@ -5,7 +5,7 @@ const run=path.join(root,'work','smoke-'+Date.now());
 const profile=path.join(run,'profile'), data=path.join(run,'data'), vault=path.join(run,'vault');
 const addon=path.join(profile,'extensions','zotero-obsidian-connector@local');
 for(const folder of [addon,data,path.join(vault,'.obsidian')]) fs.mkdirSync(folder,{recursive:true});
-for(const name of ['manifest.json','bootstrap.js','connector.js','codex-translation.js','note-document.js','note-tabs.js']) fs.copyFileSync(path.join(root,'src',name),path.join(addon,name));
+for(const name of ['manifest.json','bootstrap.js','connector.js','codex-translation.js','note-document.js','note-tabs.js','preferences.xhtml','preferences.js','preferences.css']) fs.copyFileSync(path.join(root,'src',name),path.join(addon,name));
 fs.mkdirSync(path.join(addon,'icons'));
 for(const size of [48,96]) fs.copyFileSync(path.join(root,'assets',`icon-${size}.png`),path.join(addon,'icons',`icon-${size}.png`));
 const prefs={'extensions.zotero.dataDir':data,'extensions.zotero.useDataDir':true,'extensions.zotero.httpServer.enabled':false,

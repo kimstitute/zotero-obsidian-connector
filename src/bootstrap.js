@@ -11,9 +11,16 @@ async function startup({rootURI}) {
   Services.scriptloader.loadSubScript(rootURI + 'connector.js', scope);
   connector = scope.createBridge();
   Zotero.ObsidianConnector = connector;
+  await Zotero.PreferencePanes.register({
+    pluginID: 'zotero-obsidian-connector@local', id: 'zoc-preferences',
+    label: 'Obsidian Connector', src: rootURI + 'preferences.xhtml',
+    scripts: [rootURI + 'preferences.js'], stylesheets: [rootURI + 'preferences.css'],
+    image: rootURI + 'icons/icon-48.png'
+  });
   await connector.start();
 }
 async function shutdown() {
+  Zotero.PreferencePanes.unregister('zoc-preferences');
   if (connector) await connector.stop();
   delete Zotero.ObsidianConnector;
   connector = null;

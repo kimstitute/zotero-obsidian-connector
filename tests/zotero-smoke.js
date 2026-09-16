@@ -71,6 +71,52 @@
       check('live OpenAI device code issued without CLI or shared auth',issued);
       check('live probe leaves connector signed out',!(await nativeAuth.status()).signedIn);
     }
+    const prefWindow=Zotero.Utilities.Internal.openPreferences('zoc-preferences');
+    let settingsRoot;
+    for(let attempt=0;attempt<250;attempt++) {
+      settingsRoot=prefWindow.document.getElementById('zoc-settings');
+      if(settingsRoot?.dataset.ready==='true')break;
+      await Zotero.Promise.delay(20);
+    }
+    if(settingsRoot?.dataset.ready!=='true')result.settingsDiagnostic={root:!!settingsRoot,feedback:settingsRoot?.querySelector('#zoc-feedback')?.textContent,html:prefWindow.document.documentElement.outerHTML.slice(-4000)};
+    check('native settings pane loads',settingsRoot?.dataset.ready==='true');
+    const field=id=>settingsRoot.querySelector('#zoc-'+id);
+    check('settings folder picker and form have layout',field('browse').getBoundingClientRect().width>50 && field('vault').getBoundingClientRect().width>100);
+    check('translation options initially hidden',field('translation-options').hidden);
+    field('translate').checked=true;field('translate').dispatchEvent(new prefWindow.Event('change'));
+    check('translation toggle reveals ChatGPT controls',!field('translation-options').hidden&&!field('chatgpt').hidden);
+    field('provider').value='api';field('provider').dispatchEvent(new prefWindow.Event('change'));
+    check('API provider reveals masked key field',!field('api').hidden&&field('chatgpt').hidden&&field('api-key').type==='password');
+    field('vault').value=__VAULT__;field('folder').value='SettingsTest';field('translate').checked=false;
+    field('save').click();
+    for(let attempt=0;attempt<100&&field('save').disabled;attempt++)await Zotero.Promise.delay(20);
+    check('GUI saves settings without syncing',bridge.getSettings().noteFolder==='SettingsTest'&&!await IOUtils.exists(PathUtils.join(__VAULT__,'SettingsTest','dashboard.md')));
+    field('folder').value='../escape';field('save').click();
+    for(let attempt=0;attempt<100&&field('save').disabled;attempt++)await Zotero.Promise.delay(20);
+    check('GUI shows validation errors inline and preserves saved config',field('feedback').dataset.error==='true'&&bridge.getSettings().noteFolder==='SettingsTest');
+    field('folder').value='SettingsTest';field('save-sync').click();
+    for(let attempt=0;attempt<100&&field('save-sync').disabled;attempt++)await Zotero.Promise.delay(20);
+    check('GUI save and sync creates the dashboard',await IOUtils.exists(PathUtils.join(__VAULT__,'SettingsTest','dashboard.md')));
+    field('translate').checked=true;field('provider').value='codex';field('provider').dispatchEvent(new prefWindow.Event('change'));
+    let guiApprove, guiURL='';const guiApproval=new Promise(resolve=>guiApprove=resolve);
+    try {
+      Zotero.launchURL=url=>{guiURL=url;};
+      w.fetch=async(url,options)=>{
+        if(url.endsWith('/deviceauth/token'))await guiApproval;
+        const response=await authDeps.request(url,{payload:options.body});
+        return {ok:true,text:async()=>typeof response==='string'?response:JSON.stringify(response)};
+      };
+      field('login').click();
+      for(let attempt=0;attempt<100&&!guiURL;attempt++)await Zotero.Promise.delay(20);
+      check('settings GUI login shows inline code',!field('device').hidden&&field('device-code').value==='TEST-ONLY'&&guiURL==='https://auth.openai.com/codex/device');
+      guiApprove();
+      for(let attempt=0;attempt<100&&(field('account-status').dataset.connected!=='true'||field('logout').disabled);attempt++)await Zotero.Promise.delay(20);
+      check('settings GUI login updates account status',field('account-status').dataset.connected==='true'&&field('device').hidden);
+      field('logout').click();
+      for(let attempt=0;attempt<100&&field('account-status').dataset.connected==='true';attempt++)await Zotero.Promise.delay(20);
+      check('settings GUI logout removes saved credential',field('account-status').dataset.connected==='false'&&!(await nativeAuth.status()).signedIn);
+    } finally {guiApprove();w.fetch=savedFetch;Zotero.launchURL=originalLaunch;}
+    prefWindow.close();
     const item=new Zotero.Item('journalArticle');
     item.setField('title','Internal note editor — 한글 검증'); item.setField('abstractNote','<script>throw Error("unsafe")</script>'); await item.saveTx();
     await bridge.configure({vaultPath:__VAULT__,noteFolder:'Papers'});
