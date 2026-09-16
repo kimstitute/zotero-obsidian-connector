@@ -1,3 +1,16 @@
+## v0.4.0 — ChatGPT sign-in for Korean abstract translation
+
+Translate abstracts without entering an API key by delegating authentication and model requests to the official Codex CLI.
+
+- Make Codex OAuth the default provider for newly enabled translation while preserving the v0.3.0 OpenAI-compatible API option.
+- Add Zotero configuration and Tools-menu sign-in flows for ChatGPT.
+- Keep OAuth credentials under Codex CLI control; the plugin does not read or store token files.
+- Pass only the abstract through a short-lived temporary file to an ephemeral, read-only Codex run, then remove it.
+- Cache translations by source text, provider, model, and prompt; run Codex translations sequentially and retain source-abstract fallback.
+- Retain literature-note synchronization, the title dashboard, Obsidian new-tab opening, Zotero Markdown tabs, and conflict-safe shared editing.
+
+Requires Zotero 9.0.x, a configured local Obsidian vault, and the official Codex CLI for ChatGPT translation. Codex requests use the signed-in account's available allowance.
+
 ## v0.3.0 — Optional Korean abstract translation
 
 Create literature notes with Korean abstracts through a user-configured OpenAI-compatible endpoint. The fixed translation instruction keeps technical terms, method/model/dataset names, acronyms, equations, code identifiers, organizations, and proper nouns in English.

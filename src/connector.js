@@ -3,11 +3,15 @@ function createBridge(deps) {
   if (!deps) {
     const window = Zotero.getMainWindow();
     const timers = window.ChromeUtils.importESModule('resource://gre/modules/Timer.sys.mjs');
-    deps = {Z: Zotero, io: window.IOUtils, path: window.PathUtils, timers, createNoteTabs, mergeNote};
+    deps = {Z: Zotero, io: window.IOUtils, path: window.PathUtils, timers, Services,
+      createNoteTabs, mergeNote, createCodexTranslator};
   }
   const {Z, io, path, timers} = deps;
   const merge = deps.mergeNote || (typeof require !== 'undefined' ? require('./note-document.js').mergeNote : null);
   const noteTabs = deps.createNoteTabs ? deps.createNoteTabs({Z, timers}) : null;
+  const codex = deps.codexTranslator || (deps.createCodexTranslator ? deps.createCodexTranslator({
+    Z, io, path, Services: deps.Services, executable: deps.codexExecutable
+  }) : null);
   let config = deps.config || null;
   let translationApiKey = deps.translationApiKey || '';
   let translationCache = {};
@@ -22,10 +26,15 @@ function createBridge(deps) {
     'Return only the translated abstract without a heading, quotation marks, or commentary.'
   ].join(' ');
   function translationDefaults(value = {}) {
+    const legacyApi = value.translateAbstracts === true && !value.translationProvider &&
+      (value.translationEndpoint || value.translationModel);
+    const provider = value.translationProvider || (legacyApi ? 'api' : 'codex');
     return {
       enabled: value.translateAbstracts === true,
+      provider,
       endpoint: value.translationEndpoint || 'http://127.0.0.1:11434/v1/chat/completions',
-      model: value.translationModel || 'qwen2.5:7b'
+      model: value.translationModel || 'qwen2.5:7b',
+      codexModel: value.codexModel || ''
     };
   }
   function validateTranslationURL(value) {
@@ -53,16 +62,24 @@ function createBridge(deps) {
     }
     const translation = translationDefaults(value);
     if (translation.enabled) {
-      translation.endpoint = validateTranslationURL(String(translation.endpoint || '').trim());
-      translation.model = String(translation.model || '').trim();
-      if (!translation.model || translation.model.length > 200) throw new Error('Enter a translation model name.');
+      if (!['codex', 'api'].includes(translation.provider)) throw new Error('Choose Codex OAuth or an OpenAI-compatible API for translation.');
+      if (translation.provider === 'api') {
+        translation.endpoint = validateTranslationURL(String(translation.endpoint || '').trim());
+        translation.model = String(translation.model || '').trim();
+        if (!translation.model || translation.model.length > 200) throw new Error('Enter a translation model name.');
+      } else {
+        translation.codexModel = String(translation.codexModel || '').trim();
+        if (translation.codexModel.length > 200) throw new Error('The Codex model name is too long.');
+      }
     }
     return {config: {
       vaultPath,
       noteFolder: segments.join('/'),
       translateAbstracts: translation.enabled,
+      translationProvider: translation.provider,
       translationEndpoint: translation.endpoint,
-      translationModel: translation.model
+      translationModel: translation.model,
+      codexModel: translation.codexModel
     }, directory: path.join(vaultPath, ...segments)};
   }
   async function configure(value) {
@@ -85,21 +102,37 @@ function createBridge(deps) {
     const noteFolder = window.prompt('Notes folder inside the vault:', config?.noteFolder || 'Papers');
     if (noteFolder === null) return;
     const enabled = window.confirm('Translate Zotero abstracts into Korean when creating Obsidian notes?\n\nTechnical terms, model and dataset names, acronyms, and proper nouns will stay in English.');
-    let translationEndpoint, translationModel, key;
+    let translationProvider, translationEndpoint, translationModel, codexModel, key;
     if (enabled) {
       const defaults = translationDefaults(config || {});
-      translationEndpoint = window.prompt('OpenAI-compatible chat completions URL:', defaults.endpoint);
-      if (translationEndpoint === null) return;
-      translationModel = window.prompt('Translation model:', defaults.model);
-      if (translationModel === null) return;
-      key = window.prompt('Optional Bearer API key. Leave blank for local Ollama. It is stored only in local Zotero preferences:', '');
-      if (key === null) return;
+      const choice = window.prompt('Translation provider:\n\n1 = ChatGPT sign-in through Codex CLI (no API key)\n2 = OpenAI-compatible endpoint\n\nEnter 1 or 2:', defaults.provider === 'api' ? '2' : '1');
+      if (choice === null) return;
+      translationProvider = choice.trim() === '2' ? 'api' : choice.trim() === '1' ? 'codex' : '';
+      if (!translationProvider) throw new Error('Enter 1 for Codex OAuth or 2 for an API endpoint.');
+      if (translationProvider === 'codex') {
+        if (!codex) throw new Error('Codex translation support is unavailable. Reinstall the connector.');
+        const state = await codex.status();
+        if (!state.installed) throw new Error('Codex CLI was not found. Install Codex CLI, restart Zotero, and configure again.');
+        if (!state.signedIn) {
+          if (!window.confirm('Codex CLI is installed but is not signed in to ChatGPT. Start sign-in now?')) return;
+          await codex.login();
+        }
+        codexModel = window.prompt('Optional Codex model override. Leave blank to use the Codex CLI default:', defaults.codexModel);
+        if (codexModel === null) return;
+      } else {
+        translationEndpoint = window.prompt('OpenAI-compatible chat completions URL:', defaults.endpoint);
+        if (translationEndpoint === null) return;
+        translationModel = window.prompt('Translation model:', defaults.model);
+        if (translationModel === null) return;
+        key = window.prompt('Optional Bearer API key. Leave blank for local Ollama. It is stored only in local Zotero preferences:', '');
+        if (key === null) return;
+      }
     }
     await configure({
       vaultPath: vaultPath.trim(), noteFolder: noteFolder.trim(),
       translateAbstracts: enabled,
-      translationEndpoint, translationModel,
-      ...(enabled ? {translationApiKey: key} : {})
+      translationProvider, translationEndpoint, translationModel, codexModel,
+      ...(enabled && translationProvider === 'api' ? {translationApiKey: key} : {})
     });
     window.alert('Connector configured. Open your notes folder/dashboard.md in Obsidian.');
   }
@@ -156,9 +189,16 @@ function createBridge(deps) {
   async function requestTranslation(abstract) {
     const translation = translationDefaults(config || {});
     if (deps.translate) return String(await deps.translate({
-      abstract, endpoint: translation.endpoint, model: translation.model,
+      abstract, provider: translation.provider, endpoint: translation.endpoint,
+      model: translation.provider === 'codex' ? translation.codexModel : translation.model,
       apiKey: translationApiKey, systemPrompt: translationSystemPrompt
     })).trim();
+    if (translation.provider === 'codex') {
+      if (!codex) throw new Error('Codex translation support is unavailable. Reinstall the connector.');
+      return String(await codex.translate({
+        abstract, model: translation.codexModel, systemPrompt: translationSystemPrompt
+      })).trim();
+    }
     if (!Z.HTTP?.request) throw new Error('Zotero HTTP API is unavailable.');
     const headers = {'Content-Type': 'application/json'};
     if (translationApiKey) headers.Authorization = 'Bearer ' + translationApiKey;
@@ -183,14 +223,18 @@ function createBridge(deps) {
     if (!translation.enabled || !source) return {text: source, translated: false};
     const id = identity(item), sourceHash = fingerprint(source);
     const cached = translationCache[id];
-    if (cached && cached.sourceHash === sourceHash && cached.endpoint === translation.endpoint &&
-        cached.model === translation.model && cached.promptVersion === translationPromptVersion && cached.translation) {
+    const provider = translation.provider;
+    const endpoint = provider === 'api' ? translation.endpoint : '';
+    const model = provider === 'api' ? translation.model : translation.codexModel;
+    if (cached && cached.sourceHash === sourceHash && (cached.provider || 'api') === provider &&
+        (cached.endpoint || '') === endpoint && (cached.model || '') === model &&
+        cached.promptVersion === translationPromptVersion && cached.translation) {
       return {text: cached.translation, translated: true, cached: true};
     }
     try {
       const translated = await requestTranslation(source);
-      if (!translated) throw new Error('Translation API returned an empty translation.');
-      translationCache[id] = {sourceHash, endpoint: translation.endpoint, model: translation.model,
+      if (!translated) throw new Error('The translation provider returned an empty translation.');
+      translationCache[id] = {sourceHash, provider, endpoint, model,
         promptVersion: translationPromptVersion, translation: translated};
       return {text: translated, translated: true, cached: false};
     } catch (error) {
@@ -198,7 +242,8 @@ function createBridge(deps) {
       return {text: source, translated: false, error: String(error)};
     }
   }
-  async function translateItems(items, concurrency = 3) {
+  async function translateItems(items, concurrency = null) {
+    if (concurrency === null) concurrency = translationDefaults(config || {}).provider === 'codex' ? 1 : 3;
     const results = new Map();
     let cursor = 0;
     async function worker() {
@@ -399,6 +444,17 @@ function createBridge(deps) {
       parent.appendChild(node); nodes.push(node);
     }
     menu('menu_ToolsPopup', 'zoc-configure', 'Zotero–Obsidian Connector: Configure…', () => configureWindow(window));
+    menu('menu_ToolsPopup', 'zoc-codex-login', 'Zotero–Obsidian Connector: Sign in to ChatGPT…', async () => {
+      if (!codex) throw new Error('Codex translation support is unavailable. Reinstall the connector.');
+      const state = await codex.status();
+      if (!state.installed) throw new Error('Codex CLI was not found. Install Codex CLI, restart Zotero, and try again.');
+      if (state.signedIn) {
+        window.alert('Codex CLI is signed in to ChatGPT.');
+        return;
+      }
+      await codex.login();
+      window.alert('Codex CLI is now signed in to ChatGPT.');
+    });
     menu('menu_ToolsPopup', 'zoc-dashboard', 'Open literature dashboard in Obsidian', async () => {
       await syncAll();
       Z.launchURL('obsidian://open?path=' + encodeURIComponent(path.join(directory, 'dashboard.md')) + '&paneType=tab');

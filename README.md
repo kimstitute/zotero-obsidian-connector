@@ -33,7 +33,7 @@ Keep references in Zotero and your thinking in Obsidian. The connector creates o
 
 **Zotero library → Markdown notes → Title dashboard**
 
-Open a note from Zotero, or follow its backlink to the original item. The core connector needs no API key, AI service, or Obsidian community plugin. Korean abstract translation is optional and uses an OpenAI-compatible endpoint that you choose.
+Open a note from Zotero, or follow its backlink to the original item. The core connector needs no API key, AI service, or Obsidian community plugin. Korean abstract translation is optional; the default translation path uses ChatGPT sign-in through the official Codex CLI, with an OpenAI-compatible endpoint retained as an advanced option.
 
 Opening a paper or dashboard from Zotero uses a **new Obsidian tab**, keeping your current tab in place.
 
@@ -134,7 +134,20 @@ Choose **Open Obsidian note in Zotero tab** from a paper or its PDF reader. The 
 This is a basic Markdown editor, not the embedded Obsidian application. The preview supports headings, bullets, bold text, code, and HTTP/Zotero links. Wikilink navigation, math, tables, embedded media, and Obsidian plugins require Obsidian. Raw HTML is displayed as text; previews do not load remote images or execute note code. Saves retain the previous revision as `.bridge-bak`; keep normal vault backups because cross-application writes cannot be fully locked.
 ### Optional Korean abstract translation
 
-Run **Tools → Zotero–Obsidian Connector: Configure…** and enable abstract translation. Enter an OpenAI-compatible `chat/completions` URL and model. The translation instruction keeps technical terms, methods, model and dataset names, acronyms, equations, code identifiers, organizations, and proper nouns in English.
+Run **Tools → Zotero–Obsidian Connector: Configure…** and enable abstract translation. Choose one of two providers. The translation instruction keeps technical terms, methods, model and dataset names, acronyms, equations, code identifiers, organizations, and proper nouns in English.
+
+#### ChatGPT sign-in through Codex CLI (default)
+
+1. Install the official [Codex CLI](https://developers.openai.com/codex/cli).
+2. In the connector configuration, choose **1 = ChatGPT sign-in through Codex CLI**.
+3. If needed, the connector starts the Codex browser sign-in. You can also run **Tools → Zotero–Obsidian Connector: Sign in to ChatGPT…** later.
+4. Leave the model override blank to use the Codex CLI default.
+
+The plugin never reads or stores Codex OAuth tokens. It asks the installed CLI to check sign-in and perform each translation. The abstract is written to a short-lived temporary file, translated in an ephemeral read-only Codex run, and removed afterward. Usage counts against the limits of the ChatGPT/Codex account used to sign in.
+
+#### OpenAI-compatible endpoint (advanced)
+
+Choose **2 = OpenAI-compatible endpoint**, then enter a `chat/completions` URL and model. This keeps the v0.3.0 workflow available for Ollama and compatible cloud services.
 
 For a fully local setup with [Ollama](https://ollama.com/):
 
@@ -152,7 +165,7 @@ Use these values in the connector:
 
 Cloud services must use an HTTPS endpoint. If the service requires a Bearer key, enter it during configuration. The key is kept separately in local Zotero preferences and is never written to a Markdown note, status file, translation cache, or this repository.
 
-Translations are cached in `.zotero-bridge-translations.json` inside the configured notes folder. An unchanged abstract is not sent again. Changing the source abstract, endpoint, model, or translation prompt invalidates its cached translation. If the service is unavailable or returns invalid data, synchronization continues with the original abstract and records a translation fallback in the status file.
+Translations are cached in `.zotero-bridge-translations.json` inside the configured notes folder. An unchanged abstract is not sent again. Changing the source abstract, provider, endpoint, model, or translation prompt invalidates its cached translation. If the provider is unavailable or returns invalid data, synchronization continues with the original abstract and records a translation fallback in the status file.
 
 ## Questions
 
@@ -182,7 +195,7 @@ The connector exports bibliographic metadata and abstracts. Standalone attachmen
 <details>
 <summary><strong>Where does my data go?</strong></summary>
 
-Notes are written to your selected local vault. The connector includes no analytics. When Korean translation is disabled, it does not send library metadata to a translation service. When translation is enabled, each uncached abstract is sent to the endpoint you configured. Published builds may contact GitHub to check for plugin updates. Your vault's sync services and other plugins operate independently.
+Notes are written to your selected local vault. The connector includes no analytics. When Korean translation is disabled, it does not send library metadata to a translation service. When translation is enabled, each uncached abstract is sent either through the signed-in Codex CLI to OpenAI or to the endpoint you configured. No title, author list, PDF, personal note, or vault file is added to the translation request. Published builds may contact GitHub to check for plugin updates. Your vault's sync services and other plugins operate independently.
 
 Generated notes, the translation cache, local settings, and status/error files can contain item keys, metadata, translations, and filesystem paths. Review them before attaching them to public issue reports. Do not include an API key in a bug report.
 

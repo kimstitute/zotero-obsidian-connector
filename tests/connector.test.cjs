@@ -19,7 +19,7 @@ function fixture(options = {}) {
     writeUTF8:async(p,s,o={})=>{if(o.mode==='create'&&files.has(p))throw Error('exists');if(o.backupFile)files.set(o.backupFile,files.get(p));files.set(p,s);}};
   const timers={setTimeout:f=>(pending=f,1),clearTimeout:()=>{pending=null;}};
   const config = options.unconfigured ? null : {vaultPath: "C:/TestVault",noteFolder: "Papers",...(options.config || {})};
-  return {bridge:createBridge({Z,io,path:{join:path.join,filename:path.basename,isAbsolute:path.isAbsolute,normalize:path.normalize},timers,config,translate:options.translate,translationApiKey:options.translationApiKey}),items,files,launched,errors,make,io,Z,prefs,notify:(...a)=>notify(...a),flush:async()=>{const f=pending;pending=null;if(f)f();await Promise.resolve();}};
+  return {bridge:createBridge({Z,io,path:{join:path.join,filename:path.basename,isAbsolute:path.isAbsolute,normalize:path.normalize,tempDir:'C:/Temp'},timers,config,translate:options.translate,codexTranslator:options.codexTranslator,translationApiKey:options.translationApiKey}),items,files,launched,errors,make,io,Z,prefs,notify:(...a)=>notify(...a),flush:async()=>{const f=pending;pending=null;if(f)f();await Promise.resolve();}};
 }
 const dir='C:\\TestVault\\Papers';
 test('full library coverage, group keys separated, excluded feeds and repeat idempotence',async()=>{
@@ -167,4 +167,25 @@ test('OpenAI-compatible translation sends the fixed instruction and optional Bea
  assert.equal(body.temperature,0);assert.match(body.messages[0].content,/proper nouns in English/);assert.equal(body.messages[1].content,'초록');
  assert.match(f.files.get(path.join(dir,'library-ABCD1234.md')),/## Abstract \(한국어\)\n\n번역된 초록/);
  await f.bridge.stop();
+});
+
+test('Codex OAuth is the default for new translation settings and uses its own cache identity',async()=>{
+ let calls=0;
+ const codexTranslator={translate:async({abstract,model,systemPrompt})=>{
+   calls++;assert.equal(abstract,'초록');assert.equal(model,'gpt-test');assert.match(systemPrompt,/proper nouns/);return 'Codex 번역';
+ }};
+ const f=fixture({config:{translateAbstracts:true,translationProvider:'codex',codexModel:'gpt-test'},codexTranslator});
+ await f.bridge.start();assert.equal(calls,2);
+ assert.match(f.files.get(path.join(dir,'library-ABCD1234.md')),/## Abstract \(한국어\)\n\nCodex 번역/);
+ await f.bridge.syncAll();assert.equal(calls,2);
+ const cache=JSON.parse(f.files.get(path.join(dir,'.zotero-bridge-translations.json')));
+ assert.equal(cache.items['library-ABCD1234'].provider,'codex');
+ await f.bridge.stop();
+});
+
+test('legacy translation settings remain on the API provider',async()=>{
+ const providers=[];
+ const f=fixture({config:{translateAbstracts:true,translationEndpoint:'https://translate.example/v1/chat/completions',translationModel:'legacy'},
+   translate:async request=>(providers.push(request.provider),'번역')});
+ await f.bridge.start();assert.deepEqual(providers,['api','api']);await f.bridge.stop();
 });

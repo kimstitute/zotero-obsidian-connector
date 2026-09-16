@@ -6,6 +6,7 @@
     check('isolated profile',Zotero.Profile.dir===__PROFILE__);
     const w=Zotero.getMainWindow(), bridge=Zotero.ObsidianConnector;
     check('internal note menu installed',!!w.document.getElementById('zoc-note-tab'));
+    check('Codex sign-in menu installed',!!w.document.getElementById('zoc-codex-login'));
     const item=new Zotero.Item('journalArticle');
     item.setField('title','Internal note editor — 한글 검증'); item.setField('abstractNote','<script>throw Error("unsafe")</script>'); await item.saveTx();
     await bridge.configure({vaultPath:__VAULT__,noteFolder:'Papers'});

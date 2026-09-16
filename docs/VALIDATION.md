@@ -1,5 +1,13 @@
 # Validation
 
+## v0.4.0 Codex OAuth translation (2026-09-16)
+
+- **31 automated tests** pass across synchronization, shared-file editing, Zotero tabs, safe previews, API translation, and Codex CLI translation.
+- Codex tests cover executable discovery, CLI-owned login, provider migration, provider-aware caching, ephemeral read-only execution, structured output parsing, temporary-file cleanup, and keeping abstract text out of process arguments.
+- The plugin never opens or parses a Codex authentication file. Unit tests verify that login is delegated to the CLI process.
+- **21 integration checks** pass in an isolated Zotero **9.0.6** profile. The suite includes the packaged Codex module and verifies its sign-in menu without making a live model request.
+- Not yet verified: a complete live ChatGPT translation initiated from Zotero, or Codex executable discovery on macOS/Linux. API-service compatibility remains provider-specific.
+
 ## v0.3.0 Korean abstract translation (2026-09-16)
 
 - **27 automated tests** pass across synchronization, shared-file editing, Zotero tabs, safe previews, and translation behavior.
